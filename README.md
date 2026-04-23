@@ -1,5 +1,7 @@
 ![banner](banner.png)
 
+![demo](demo.gif)
+
 What if a ghost 👻 loved a strawberry? 🍓
 
 What if a skull kissed the moon?
