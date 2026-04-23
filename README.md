@@ -1,13 +1,22 @@
 # 🍳 emoji kitchen
 
+![banner](banner.png)
+
 What if a ghost 👻 loved a strawberry? 🍓
+
 What if a skull kissed the moon?
+
 These are the questions that matter most.
+
 These are the questions answered soon!
 
 ---
 
 A collection of Python tools for browsing, searching, and living with [Google Emoji Kitchen](https://emojikitchen.dev/) mashups on your Linux desktop.
+
+Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
+
+Here's how to use this script to make it easy to search and create them:
 
 ## Tools
 
