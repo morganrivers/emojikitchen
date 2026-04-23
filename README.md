@@ -32,11 +32,20 @@ Here's how to use this script to make it easy to search and create them:
 
 ## Setup
 
-Requires `rofi`, `PIL`, and (for semantic search) `sentence-transformers` and `clip`. The combined daemon is auto-started when needed.
+Getting everything running requires a few one-time steps: downloading the metadata index (~94 MB), building semantic text embeddings (~216 MB, ~10 min), and optionally building CLIP image embeddings (~65 MB). Total cache footprint is around **570 MB**.
+
+Copy the scripts to `~/.local/bin/`, then kick off the index build:
+
+```bash
+chmod +x *.py && cp *.py ~/.local/bin/
+python3 ~/.local/bin/emoji-wallpaper.py   # downloads index, sets today's wallpaper
+```
+
+For semantic and CLIP search you'll also need a Python env with `sentence-transformers` and `torch`. See **[docs/README.md](docs/README.md)** for the full step-by-step reproduction guide, including how to build the embeddings, cache size breakdown, and wallpaper autostart setup.
 
 Bind your picker of choice in i3 or sway:
 ```
-bindsym $mod+shift+e exec python3 ~/.local/bin/emoji-picker-combined.py
+bindsym $mod+shift+e exec --no-startup-id ~/.local/bin/emoji-picker-combined.py
 ```
 
 ---
