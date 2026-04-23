@@ -1,5 +1,3 @@
-# 🍳 emoji kitchen
-
 ![banner](banner.png)
 
 What if a ghost 👻 loved a strawberry? 🍓
