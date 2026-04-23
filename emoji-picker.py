@@ -39,7 +39,9 @@ DAEMON_PY = Path.home() / ".local" / "bin" / "emoji-combined-daemon.py"
 TILE_SIZE = 200
 MAX_RESULTS = 5000
 BATCH_SIZE = 100
-LOAD_MORE = "⬇  load more results..."
+LOAD_MORE  = "⬇  load more results..."
+STORY_PY   = Path.home() / ".local" / "bin" / "emoji-story.py"
+STORY_OUT  = Path("/tmp/emoji-story.png")
 
 
 def rofi(prompt, entries_with_icons=None, text_entries=None, lines=0):
@@ -283,9 +285,17 @@ def main():
 
     while True:
         # Mode selector — Escape here exits
-        mode = rofi("emoji:", text_entries=["keyword search", "combo", "semantic search (better, slow)"])
+        mode = rofi("emoji:", text_entries=["keyword search", "combo", "semantic search (better, slow)", "emoji story"])
         if not mode:
             sys.exit(0)
+
+        if mode == "emoji story":
+            text = rofi("story text:")
+            if not text:
+                continue
+            subprocess.run([str(STORY_PY), "--output", str(STORY_OUT), text], check=True)
+            subprocess.Popen(["firefox", str(STORY_OUT)])
+            break
 
         if mode == "combo":
             base_index = build_base_emoji_index(entries)
