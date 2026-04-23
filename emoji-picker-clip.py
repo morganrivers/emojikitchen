@@ -1,0 +1,242 @@
+#!/home/dmrivers/micromamba/envs/4j/bin/python3
+"""
+Visual emoji kitchen picker via rofi — CLIP image search.
+Encodes cached thumbnail images with CLIP; queries with text.
+On first run, builds embeddings from whatever thumbs are cached (~8k).
+
+Usage:
+  emoji-picker-clip.py            normal picker
+  emoji-picker-clip.py --build    force-rebuild embeddings
+"""
+
+import sys
+import os
+import re
+import hashlib
+import shutil
+import subprocess
+import urllib.request
+import concurrent.futures
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+from sentence_transformers import SentenceTransformer
+
+CACHE_DIR    = Path.home() / ".cache" / "emoji-wallpaper"
+SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
+THUMB_DIR    = CACHE_DIR / "thumbs"
+WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
+
+CLIP_EMBEDDINGS = CACHE_DIR / "clip-embeddings.npy"
+CLIP_URLS       = CACHE_DIR / "clip-urls.txt"
+CLIP_ALTS       = CACHE_DIR / "clip-alts.txt"
+
+MODEL_NAME  = "clip-ViT-B-32"
+TILE_SIZE   = 200
+MAX_RESULTS = 5000
+BATCH_SIZE  = 100
+LOAD_MORE   = "⬇  load more results..."
+
+
+# ── embedding builder ────────────────────────────────────────────────────────
+
+def build_embeddings():
+    print("Building hash→url map from search index...", flush=True)
+    url_map = {}
+    with open(SEARCH_INDEX) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t", 2)
+            if len(parts) >= 2:
+                url, alt = parts[0], parts[1]
+                url_map[hashlib.md5(url.encode()).hexdigest()] = (url, alt)
+
+    thumb_files = sorted(THUMB_DIR.glob("*.png"))
+    matched = [(url_map[p.stem], p) for p in thumb_files if p.stem in url_map]
+    print(f"Matched {len(matched)} cached thumbs.", flush=True)
+
+    model = SentenceTransformer(MODEL_NAME)
+    print(f"Encoding {len(matched)} images with {MODEL_NAME}...", flush=True)
+
+    CHUNK = 64
+    all_embeddings, urls, alts = [], [], []
+    for i in range(0, len(matched), CHUNK):
+        chunk = matched[i:i + CHUNK]
+        images, chunk_urls, chunk_alts = [], [], []
+        for (url, alt), path in chunk:
+            try:
+                images.append(Image.open(path).convert("RGB"))
+                chunk_urls.append(url)
+                chunk_alts.append(alt)
+            except Exception:
+                pass
+        if images:
+            embs = model.encode(images, normalize_embeddings=True, batch_size=CHUNK)
+            all_embeddings.append(embs)
+            urls.extend(chunk_urls)
+            alts.extend(chunk_alts)
+        print(f"  {min(i + CHUNK, len(matched))}/{len(matched)}", end="\r", flush=True)
+
+    print(flush=True)
+    embeddings = np.vstack(all_embeddings)
+    np.save(CLIP_EMBEDDINGS, embeddings)
+    CLIP_URLS.write_text("\n".join(urls))
+    CLIP_ALTS.write_text("\n".join(alts))
+    print(f"Saved {len(urls)} CLIP embeddings to {CACHE_DIR}", flush=True)
+    return model, embeddings, alts, urls
+
+
+# ── search ───────────────────────────────────────────────────────────────────
+
+def load_or_build():
+    if not CLIP_EMBEDDINGS.exists():
+        return build_embeddings()
+    model = SentenceTransformer(MODEL_NAME)
+    embeddings = np.load(CLIP_EMBEDDINGS)
+    alts = CLIP_ALTS.read_text().splitlines()
+    urls = CLIP_URLS.read_text().splitlines()
+    return model, embeddings, alts, urls
+
+
+def clip_search(model, embeddings, alts, urls, query, limit=MAX_RESULTS):
+    q_vec = model.encode([query], normalize_embeddings=True)[0]
+    scores = embeddings @ q_vec
+    top_idx = scores.argsort()[::-1][:limit]
+    return [(float(scores[i]), alts[i], urls[i]) for i in top_idx]
+
+
+# ── rofi UI ──────────────────────────────────────────────────────────────────
+
+def rofi(prompt, entries_with_icons=None, lines=0):
+    cmd = ["rofi", "-dmenu", "-p", prompt]
+    if entries_with_icons is not None:
+        cmd += [
+            "-show-icons",
+            "-theme-str",
+            "element-icon { size: 100px; } window { location: north; anchor: north; y-offset: 0; } listview { lines: 8; }",
+        ]
+        stdin = ""
+        for label, icon in entries_with_icons:
+            if icon:
+                stdin += f"{label}\0icon\x1f{icon}\n"
+            else:
+                stdin += f"{label}\n"
+    else:
+        cmd += ["-lines", str(lines)]
+        stdin = ""
+
+    result = subprocess.run(cmd, input=stdin, text=True, capture_output=True)
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.strip()
+
+
+def get_thumb(url):
+    THUMB_DIR.mkdir(parents=True, exist_ok=True)
+    name = hashlib.md5(url.encode()).hexdigest() + ".png"
+    path = THUMB_DIR / name
+    if not path.exists():
+        try:
+            urllib.request.urlretrieve(url, path)
+        except Exception:
+            return None
+    return str(path)
+
+
+def set_wallpaper(url, alt):
+    cached = get_thumb(url)
+    if not cached:
+        subprocess.run(["rofi", "-e", f"Could not get image for: {alt}"])
+        return
+    emoji_img = Image.open(cached).convert("RGBA")
+
+    width, height = 1920, 1080
+    try:
+        out = subprocess.check_output(["xrandr", "--current"], text=True, stderr=subprocess.DEVNULL)
+        for line in out.splitlines():
+            if " connected" in line:
+                m = re.search(r"(\d+)x(\d+)\+", line)
+                if m:
+                    width, height = int(m.group(1)), int(m.group(2))
+                    break
+    except Exception:
+        pass
+
+    tile_size = int(os.environ.get("EMOJI_TILE_SIZE", TILE_SIZE))
+    emoji_img = emoji_img.resize((tile_size, tile_size), Image.LANCZOS)
+    wallpaper = Image.new("RGBA", (width, height), "white")
+    for y in range(0, height, tile_size):
+        for x in range(0, width, tile_size):
+            wallpaper.paste(emoji_img, (x, y), emoji_img)
+    wallpaper.convert("RGB").save(WALLPAPER_PATH)
+
+    nitrogen_cfg = Path.home() / ".config" / "nitrogen" / "bg-saved.cfg"
+    if nitrogen_cfg.exists() or shutil.which("nitrogen"):
+        try:
+            nitrogen_cfg.parent.mkdir(parents=True, exist_ok=True)
+            nitrogen_cfg.write_text(f"[xin_-1]\nfile={WALLPAPER_PATH}\nmode=5\nbgcolor=#000000\n")
+            subprocess.run(["nitrogen", "--restore"], check=True, capture_output=True)
+            return
+        except Exception:
+            pass
+    try:
+        subprocess.run(["feh", "--bg-fill", str(WALLPAPER_PATH)], check=True, capture_output=True)
+    except Exception:
+        subprocess.run(["rofi", "-e", f"Wallpaper saved but couldn't set it: {WALLPAPER_PATH}"])
+
+
+# ── main ─────────────────────────────────────────────────────────────────────
+
+def main():
+    if "--build" in sys.argv:
+        build_embeddings()
+        return
+
+    if not SEARCH_INDEX.exists():
+        subprocess.run(["rofi", "-e", "Search index missing — run emoji-wallpaper.py first."])
+        sys.exit(1)
+
+    model, embeddings, alts, urls = load_or_build()
+
+    query = rofi("emoji search (CLIP):")
+    if not query:
+        sys.exit(0)
+
+    results = clip_search(model, embeddings, alts, urls, query)
+
+    offset = 0
+    while True:
+        batch = results[offset:offset + BATCH_SIZE]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+            thumbs = list(ex.map(get_thumb, [url for _, _, url in batch]))
+
+        icon_entries = [(alt, thumb) for (_, alt, _), thumb in zip(batch, thumbs)]
+        has_more = offset + BATCH_SIZE < len(results)
+        if has_more:
+            icon_entries.append((LOAD_MORE, None))
+
+        selected = rofi(
+            f"'{query}' ({offset+1}–{offset+len(batch)} of {len(results)}):",
+            entries_with_icons=icon_entries,
+        )
+        if not selected:
+            sys.exit(0)
+        if selected == LOAD_MORE:
+            offset += BATCH_SIZE
+            continue
+        break
+
+    for _, alt, url in results:
+        if alt == selected:
+            thumb = get_thumb(url)
+            if thumb:
+                with open(thumb, "rb") as f:
+                    subprocess.run(
+                        ["xclip", "-selection", "clipboard", "-t", "image/png"],
+                        stdin=f, check=True,
+                    )
+            break
+
+
+if __name__ == "__main__":
+    main()
