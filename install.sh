@@ -63,8 +63,6 @@ else
         emoji-picker-clip.py \
         emoji-picker-semantic.py \
         emoji-picker-combined.py \
-        emoji-picker-split.py \
-        emoji-search.py \
         emoji-wallpaper.py \
         emoji-story.py \
         emoji-combined-daemon.py \

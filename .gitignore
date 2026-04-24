@@ -2,6 +2,8 @@ micromamba
 __pycache__
 .venv
 
+emoji-story.png
+
 # runtime cache — sockets, thumbnails, wallpaper images
 data/cache/
 
