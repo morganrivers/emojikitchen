@@ -1,4 +1,4 @@
-#!/home/dmrivers/micromamba/envs/4j/bin/python3
+#!/usr/bin/env python3
 """
 Visual emoji kitchen picker via rofi — CLIP image search.
 Encodes cached thumbnail images with CLIP; queries with text.
@@ -19,18 +19,31 @@ import urllib.request
 import concurrent.futures
 from pathlib import Path
 
-import numpy as np
-from PIL import Image
-from sentence_transformers import SentenceTransformer
+try:
+    import numpy as np
+    from fastembed import TextEmbedding
+    HAS_ML = True
+except ImportError:
+    HAS_ML = False
+
+try:
+    from PIL import Image
+    from sentence_transformers import SentenceTransformer
+    HAS_BUILD = True
+except ImportError:
+    HAS_BUILD = False
 
 CACHE_DIR    = Path.home() / ".cache" / "emoji-wallpaper"
 SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
 THUMB_DIR    = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
 
-CLIP_EMBEDDINGS = CACHE_DIR / "clip-embeddings.npy"
-CLIP_URLS       = CACHE_DIR / "clip-urls.txt"
-CLIP_ALTS       = CACHE_DIR / "clip-alts.txt"
+CLIP_EMBEDDINGS     = CACHE_DIR / "clip-embeddings.npy"
+CLIP_URLS           = CACHE_DIR / "clip-urls.txt"
+CLIP_ALTS           = CACHE_DIR / "clip-alts.txt"
+CLIP_PCA_EMBEDDINGS = CACHE_DIR / "clip-embeddings-pca256.npy"
+CLIP_PCA_MATRIX     = CACHE_DIR / "clip-pca256-matrix.npy"
+CLIP_PCA_MEAN       = CACHE_DIR / "clip-pca256-mean.npy"
 
 MODEL_NAME  = "clip-ViT-B-32"
 TILE_SIZE   = 200
@@ -39,9 +52,26 @@ BATCH_SIZE  = 100
 LOAD_MORE   = "⬇  load more results..."
 
 
+def copy_image_to_clipboard(path):
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
+        cmd = ["wl-copy", "--type", "image/png"]
+    elif shutil.which("xclip"):
+        cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
+    else:
+        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        return
+    with open(path, "rb") as f:
+        subprocess.run(cmd, stdin=f, check=True)
+
+
 # ── embedding builder ────────────────────────────────────────────────────────
 
 def build_embeddings():
+    if CLIP_EMBEDDINGS.exists():
+        backup = CLIP_EMBEDDINGS.with_name("clip-embeddings_old.npy")
+        import shutil as _shutil
+        _shutil.copy2(CLIP_EMBEDDINGS, backup)
+        print(f"Backed up existing embeddings to {backup.name}")
     print("Building hash→url map from search index...", flush=True)
     url_map = {}
     with open(SEARCH_INDEX) as f:
@@ -79,7 +109,7 @@ def build_embeddings():
 
     print(flush=True)
     embeddings = np.vstack(all_embeddings)
-    np.save(CLIP_EMBEDDINGS, embeddings)
+    np.save(CLIP_EMBEDDINGS, embeddings.astype(np.float16))
     CLIP_URLS.write_text("\n".join(urls))
     CLIP_ALTS.write_text("\n".join(alts))
     print(f"Saved {len(urls)} CLIP embeddings to {CACHE_DIR}", flush=True)
@@ -88,18 +118,37 @@ def build_embeddings():
 
 # ── search ───────────────────────────────────────────────────────────────────
 
-def load_or_build():
+def load_or_build(use_pca=False):
+    model = TextEmbedding("Qdrant/clip-ViT-B-32-text")
+    if use_pca:
+        if not CLIP_PCA_EMBEDDINGS.exists():
+            subprocess.run(["rofi", "-e", "PCA embeddings not found — run compress-clip-embeddings.py first."])
+            sys.exit(1)
+        embeddings = np.load(CLIP_PCA_EMBEDDINGS)
+        pca_matrix = np.load(CLIP_PCA_MATRIX)
+        pca_mean   = np.load(CLIP_PCA_MEAN)
+        alts = CLIP_ALTS.read_text().splitlines()
+        urls = CLIP_URLS.read_text().splitlines()
+        return model, embeddings, alts, urls, pca_matrix, pca_mean
     if not CLIP_EMBEDDINGS.exists():
-        return build_embeddings()
-    model = SentenceTransformer(MODEL_NAME)
+        if not HAS_BUILD:
+            subprocess.run(["rofi", "-e", "Build deps missing — run: pip install Pillow sentence-transformers torch"])
+            sys.exit(1)
+        embs = build_embeddings()
+        return embs + (None, None)
     embeddings = np.load(CLIP_EMBEDDINGS)
     alts = CLIP_ALTS.read_text().splitlines()
     urls = CLIP_URLS.read_text().splitlines()
-    return model, embeddings, alts, urls
+    return model, embeddings, alts, urls, None, None
 
 
-def clip_search(model, embeddings, alts, urls, query, limit=MAX_RESULTS):
-    q_vec = model.encode([query], normalize_embeddings=True)[0]
+def clip_search(model, embeddings, alts, urls, query, limit=MAX_RESULTS,
+                pca_matrix=None, pca_mean=None):
+    q_vec = next(model.embed([query])).astype(np.float32)
+    if pca_matrix is not None:
+        q_vec = q_vec - pca_mean
+        q_vec = q_vec @ pca_matrix
+        q_vec = q_vec / max(np.linalg.norm(q_vec), 1e-8)
     scores = embeddings @ q_vec
     top_idx = scores.argsort()[::-1][:limit]
     return [(float(scores[i]), alts[i], urls[i]) for i in top_idx]
@@ -135,10 +184,15 @@ def get_thumb(url):
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     name = hashlib.md5(url.encode()).hexdigest() + ".png"
     path = THUMB_DIR / name
+    if path.exists() and path.stat().st_size == 0:
+        path.unlink()
     if not path.exists():
         try:
-            urllib.request.urlretrieve(url, path)
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                data = resp.read()
+            path.write_bytes(data)
         except Exception:
+            path.unlink(missing_ok=True)
             return None
     return str(path)
 
@@ -188,6 +242,12 @@ def set_wallpaper(url, alt):
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    if not HAS_ML:
+        subprocess.run(["rofi", "-e", "ML dependencies not installed.\nRun: pip install Pillow numpy sentence-transformers torch"])
+        sys.exit(1)
+
+    use_pca = "--pca" in sys.argv
+
     if "--build" in sys.argv:
         build_embeddings()
         return
@@ -196,13 +256,14 @@ def main():
         subprocess.run(["rofi", "-e", "Search index missing — run emoji-wallpaper.py first."])
         sys.exit(1)
 
-    model, embeddings, alts, urls = load_or_build()
+    model, embeddings, alts, urls, pca_matrix, pca_mean = load_or_build(use_pca)
 
     query = rofi("emoji search (CLIP):")
     if not query:
         sys.exit(0)
 
-    results = clip_search(model, embeddings, alts, urls, query)
+    results = clip_search(model, embeddings, alts, urls, query,
+                         pca_matrix=pca_matrix, pca_mean=pca_mean)
 
     offset = 0
     while True:
@@ -230,11 +291,7 @@ def main():
         if alt == selected:
             thumb = get_thumb(url)
             if thumb:
-                with open(thumb, "rb") as f:
-                    subprocess.run(
-                        ["xclip", "-selection", "clipboard", "-t", "image/png"],
-                        stdin=f, check=True,
-                    )
+                copy_image_to_clipboard(thumb)
             break
 
 

@@ -33,8 +33,8 @@ SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
 THUMB_DIR = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
 WALLPAPER_SCRIPT = Path.home() / ".local" / "bin" / "emoji-wallpaper.py"
-SOCK_PATH = CACHE_DIR / "combined-daemon.sock"
-DAEMON_PY = Path.home() / ".local" / "bin" / "emoji-combined-daemon.py"
+SOCK_PATH = CACHE_DIR / "split-daemon.sock"
+DAEMON_PY = Path.home() / ".local" / "bin" / "emoji-split-daemon.py"
 
 TILE_SIZE = 200
 MAX_RESULTS = 5000
@@ -42,6 +42,18 @@ BATCH_SIZE = 100
 LOAD_MORE  = "⬇  load more results..."
 STORY_PY   = Path.home() / ".local" / "bin" / "emoji-story.py"
 STORY_OUT  = Path("/tmp/emoji-story.png")
+
+
+def copy_image_to_clipboard(path):
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
+        cmd = ["wl-copy", "--type", "image/png"]
+    elif shutil.which("xclip"):
+        cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
+    else:
+        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        return
+    with open(path, "rb") as f:
+        subprocess.run(cmd, stdin=f, check=True)
 
 
 def rofi(prompt, entries_with_icons=None, text_entries=None, lines=0):
@@ -284,8 +296,18 @@ def main():
     entries = load_index()
 
     while True:
-        # Mode selector — Escape here exits
-        mode = rofi("emoji:", text_entries=["keyword search", "combo", "semantic search (better, slow)", "emoji story"])
+        # Mode selector — only show options whose prerequisites are on disk
+        _has_semantic = (
+            (CACHE_DIR / "base-emoji-sem.npy").exists() and
+            ((CACHE_DIR / "embeddings.npy").exists() or
+             (CACHE_DIR / "embeddings-pca340.npy").exists())
+        )
+        modes = ["keyword search", "combo"]
+        if _has_semantic:
+            modes.append("semantic search (better, slow)")
+        if STORY_PY.exists():
+            modes.append("emoji story")
+        mode = rofi("emoji:", text_entries=modes)
         if not mode:
             sys.exit(0)
 
@@ -375,11 +397,7 @@ def main():
             if alt == selected_alt:
                 thumb = get_thumb(url)
                 if thumb:
-                    with open(thumb, "rb") as f:
-                        subprocess.run(
-                            ["xclip", "-selection", "clipboard", "-t", "image/png"],
-                            stdin=f, check=True,
-                        )
+                    copy_image_to_clipboard(thumb)
                 break
         break  # done
 

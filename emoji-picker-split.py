@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-Emoji kitchen picker combining semantic (text→keywords) and CLIP (text→image) search.
-Ranks each result in both systems independently, returns lowest rank-sum.
-Only covers the ~8k images that have been cached locally (have CLIP embeddings).
+Visual emoji kitchen picker — split-query search.
+
+1-word query  → squared combo (emoji-emoji) surfaced first
+2-word query  → best base-emoji cross-match surfaced first
+3+ word query → standard combined search
 
 Bind in i3 config:
-  bindsym $mod+shift+c exec --no-startup-id ~/.local/bin/emoji-picker-combined.py
+  bindsym $mod+shift+s exec --no-startup-id ~/.local/bin/emoji-picker-split.py
 """
 
 import sys
 import os
-import re
 import json
-import hashlib
 import shutil
+import hashlib
 import socket
 import subprocess
 import time
@@ -30,8 +31,8 @@ except ImportError:
 CACHE_DIR      = Path.home() / ".cache" / "emoji-wallpaper"
 THUMB_DIR      = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
-SOCK_PATH      = CACHE_DIR / "combined-daemon.sock"
-DAEMON_PY      = Path.home() / ".local" / "bin" / "emoji-combined-daemon.py"
+SOCK_PATH      = CACHE_DIR / "split-daemon.sock"
+DAEMON_PY      = Path.home() / ".local" / "bin" / "emoji-split-daemon.py"
 
 TILE_SIZE   = 200
 MAX_RESULTS = 5000
@@ -52,8 +53,9 @@ def copy_image_to_clipboard(path):
 
 
 def _start_daemon():
-    subprocess.Popen([str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(75):  # up to 15s — two models to load
+    daemon = DAEMON_PY if DAEMON_PY.exists() else Path(__file__).parent / "emoji-split-daemon.py"
+    subprocess.Popen([str(daemon)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(100):  # up to 20s — two models + index to load
         time.sleep(0.2)
         if SOCK_PATH.exists():
             try:
@@ -94,8 +96,6 @@ def query_daemon(query, limit=MAX_RESULTS):
     return None
 
 
-# ── rofi UI ──────────────────────────────────────────────────────────────────
-
 def rofi(prompt, entries_with_icons=None, lines=0):
     cmd = ["rofi", "-dmenu", "-p", prompt]
     if entries_with_icons is not None:
@@ -113,7 +113,6 @@ def rofi(prompt, entries_with_icons=None, lines=0):
     else:
         cmd += ["-lines", str(lines)]
         stdin = ""
-
     result = subprocess.run(cmd, input=stdin, text=True, capture_output=True)
     if result.returncode != 0 or not result.stdout.strip():
         return None
@@ -132,55 +131,8 @@ def get_thumb(url):
     return str(path)
 
 
-def set_wallpaper(url, alt):
-    if not HAS_PIL:
-        subprocess.run(["rofi", "-e", "Pillow not installed — run: pip install Pillow"])
-        return
-    cached = get_thumb(url)
-    if not cached:
-        subprocess.run(["rofi", "-e", f"Could not get image for: {alt}"])
-        return
-    emoji_img = Image.open(cached).convert("RGBA")
-
-    width, height = 1920, 1080
-    try:
-        out = subprocess.check_output(["xrandr", "--current"], text=True, stderr=subprocess.DEVNULL)
-        for line in out.splitlines():
-            if " connected" in line:
-                m = re.search(r"(\d+)x(\d+)\+", line)
-                if m:
-                    width, height = int(m.group(1)), int(m.group(2))
-                    break
-    except Exception:
-        pass
-
-    tile_size = int(os.environ.get("EMOJI_TILE_SIZE", TILE_SIZE))
-    emoji_img = emoji_img.resize((tile_size, tile_size), Image.LANCZOS)
-    wallpaper = Image.new("RGBA", (width, height), "white")
-    for y in range(0, height, tile_size):
-        for x in range(0, width, tile_size):
-            wallpaper.paste(emoji_img, (x, y), emoji_img)
-    wallpaper.convert("RGB").save(WALLPAPER_PATH)
-
-    nitrogen_cfg = Path.home() / ".config" / "nitrogen" / "bg-saved.cfg"
-    if nitrogen_cfg.exists() or shutil.which("nitrogen"):
-        try:
-            nitrogen_cfg.parent.mkdir(parents=True, exist_ok=True)
-            nitrogen_cfg.write_text(f"[xin_-1]\nfile={WALLPAPER_PATH}\nmode=5\nbgcolor=#000000\n")
-            subprocess.run(["nitrogen", "--restore"], check=True, capture_output=True)
-            return
-        except Exception:
-            pass
-    try:
-        subprocess.run(["feh", "--bg-fill", str(WALLPAPER_PATH)], check=True, capture_output=True)
-    except Exception:
-        subprocess.run(["rofi", "-e", f"Wallpaper saved but couldn't set it: {WALLPAPER_PATH}"])
-
-
-# ── main ─────────────────────────────────────────────────────────────────────
-
 def main():
-    query = rofi("emoji search (combined):")
+    query = rofi("emoji search (split):")
     if not query:
         sys.exit(0)
 

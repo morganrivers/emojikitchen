@@ -41,7 +41,7 @@ chmod +x *.py && cp *.py ~/.local/bin/
 python3 ~/.local/bin/emoji-wallpaper.py   # downloads index, sets today's wallpaper
 ```
 
-For semantic and CLIP search you'll also need a Python env with `sentence-transformers` and `torch`. See **[docs/README.md](docs/README.md)** for the full step-by-step reproduction guide, including how to build the embeddings, cache size breakdown, and wallpaper autostart setup.
+For semantic and CLIP search you'll also need a Python env with `sentence-transformers` and `torch` — a venv or conda/micromamba env both work. See **[docs/README.md](docs/README.md)** for the full step-by-step guide, including clipboard setup (xclip for X11, wl-clipboard for Wayland), how to build the embeddings, cache size breakdown, and wallpaper autostart setup.
 
 Bind your picker of choice in i3 or sway:
 ```

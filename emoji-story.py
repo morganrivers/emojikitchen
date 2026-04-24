@@ -1,4 +1,4 @@
-#!/home/dmrivers/micromamba/envs/4j/bin/python3
+#!/usr/bin/env python3
 """
 Turn text into a phrase-per-row PNG with one emoji kitchen image per phrase.
 

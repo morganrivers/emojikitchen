@@ -1,4 +1,4 @@
-#!/home/dmrivers/micromamba/envs/4j/bin/python3
+#!/usr/bin/env python3
 """
 Persistent semantic search daemon.
 Loads model + embeddings once, serves queries via Unix socket.
@@ -17,11 +17,14 @@ import threading
 import sys
 import numpy as np
 from pathlib import Path
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 CACHE_DIR           = Path.home() / ".cache" / "emoji-wallpaper"
 SOCK_PATH           = CACHE_DIR / "daemon.sock"
 EMBEDDINGS_FILE     = CACHE_DIR / "embeddings.npy"
+EMBEDDINGS_PCA      = CACHE_DIR / "embeddings-pca340.npy"
+EMBEDDINGS_PCA_MAT  = CACHE_DIR / "embeddings-pca340-matrix.npy"
+EMBEDDINGS_PCA_MEAN = CACHE_DIR / "embeddings-pca340-mean.npy"
 EMBEDDING_URLS_FILE = CACHE_DIR / "embedding-urls.txt"
 EMBEDDING_ALTS_FILE = CACHE_DIR / "embedding-alts.txt"
 IDLE_TIMEOUT        = 600  # seconds
@@ -29,18 +32,28 @@ IDLE_TIMEOUT        = 600  # seconds
 
 def load():
     print("Loading model...", flush=True)
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    # Warm up torch JIT so first real query is fast
-    model.encode(["warmup"], normalize_embeddings=True)
+    model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")
+    next(model.embed(["warmup"]))  # warm up ONNX session
     print("Loading embeddings...", flush=True)
-    embeddings = np.load(EMBEDDINGS_FILE)
+    if EMBEDDINGS_FILE.exists():
+        embeddings = np.load(EMBEDDINGS_FILE).astype(np.float32)
+        pca_matrix, pca_mean = None, None
+        print(f"  using full embeddings ({embeddings.shape[1]} dims)", flush=True)
+    elif EMBEDDINGS_PCA.exists():
+        embeddings = np.load(EMBEDDINGS_PCA).astype(np.float32)
+        pca_matrix = np.load(EMBEDDINGS_PCA_MAT).astype(np.float32)
+        pca_mean   = np.load(EMBEDDINGS_PCA_MEAN).astype(np.float32)
+        print(f"  using PCA embeddings ({embeddings.shape[1]} dims)", flush=True)
+    else:
+        print("No embeddings found — run build-semantic-embeddings.sh first.", flush=True)
+        sys.exit(1)
     alts = EMBEDDING_ALTS_FILE.read_text().splitlines()
     urls = EMBEDDING_URLS_FILE.read_text().splitlines()
     print(f"Ready — {len(alts):,} combinations.", flush=True)
-    return model, embeddings, alts, urls
+    return model, embeddings, pca_matrix, pca_mean, alts, urls
 
 
-def handle(conn, model, embeddings, alts, urls):
+def handle(conn, model, embeddings, pca_matrix, pca_mean, alts, urls):
     try:
         data = b""
         while True:
@@ -53,7 +66,10 @@ def handle(conn, model, embeddings, alts, urls):
         req = json.loads(data.decode())
         query = req["query"]
         limit = req.get("limit", 20)
-        q_vec = model.encode([query], normalize_embeddings=True)[0]
+        q_vec = next(model.embed([query])).astype(np.float32)
+        if pca_matrix is not None:
+            q_vec = (q_vec - pca_mean) @ pca_matrix
+            q_vec /= max(np.linalg.norm(q_vec), 1e-8)
         scores = embeddings @ q_vec
         top_idx = scores.argsort()[::-1][:limit]
         results = [{"alt": alts[i], "url": urls[i], "score": float(scores[i])} for i in top_idx]
@@ -72,7 +88,7 @@ def main():
     if SOCK_PATH.exists():
         SOCK_PATH.unlink()
 
-    model, embeddings, alts, urls = load()
+    model, embeddings, pca_matrix, pca_mean, alts, urls = load()
 
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(str(SOCK_PATH))
@@ -91,7 +107,7 @@ def main():
                 break
             threading.Thread(
                 target=handle,
-                args=(conn, model, embeddings, alts, urls),
+                args=(conn, model, embeddings, pca_matrix, pca_mean, alts, urls),
                 daemon=True,
             ).start()
     finally:

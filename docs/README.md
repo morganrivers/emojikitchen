@@ -2,23 +2,41 @@
 
 This guide covers everything needed to reproduce all tools from scratch on a new Linux machine.
 
+Only **Step 1** is required to get the keyword picker and wallpaper tools working. Steps 2 and 3 are optional upgrades that add semantic and image-similarity search.
+
 ---
 
 ## Prerequisites
 
 **System packages** (install via your distro's package manager):
-```
-rofi
-feh           # or nitrogen — for setting wallpaper
-xclip         # for clipboard copy in emoji-picker-clip.py
-xrandr        # usually pre-installed with X11
-```
-
-**Python environment**: The ML scripts (`emoji-picker-semantic.py`, `emoji-picker-combined.py`, `emoji-picker-clip.py`, and both daemons) require a Python environment with heavy ML libraries. A `micromamba`/`conda` env is recommended:
-
 ```bash
+sudo apt install rofi feh xrandr
+# clipboard: pick one based on your session type
+sudo apt install xclip          # X11 (most common on Ubuntu)
+sudo apt install wl-clipboard   # Wayland (Ubuntu 22.04+ default GNOME session)
+```
+
+The pickers auto-detect which clipboard tool is available at runtime, so install whichever matches your session. If unsure, install both — they don't conflict.
+
+**Python environment** *(only needed for optional Steps 2 and 3)*: The ML scripts require a Python environment with heavy ML libraries.
+
+**Option A — pip + venv** (no extra tools needed):
+```bash
+python3 -m venv ~/.venv/emojikitchen
+source ~/.venv/emojikitchen/bin/activate
+pip install Pillow sentence-transformers numpy torch torchvision
+```
+
+**Option B — conda / micromamba** (micromamba is a drop-in conda replacement):
+```bash
+# conda:
+conda create -n emojikitchen python=3.11
+conda activate emojikitchen
+
+# or micromamba:
 micromamba create -n emojikitchen python=3.11
 micromamba activate emojikitchen
+
 pip install Pillow sentence-transformers numpy torch torchvision
 ```
 
@@ -28,7 +46,7 @@ The basic scripts (`emoji-wallpaper.py`, `emoji-search.py`) only need `Pillow` a
 
 ## Install Scripts
 
-Copy all scripts to `~/.local/bin/` and mark them executable:
+Copy all scripts to `~/.local/bin/` and mark them executable, then drop the pre-built embeddings into the cache:
 
 ```bash
 cp emoji-wallpaper.py emoji-search.py emoji-story.py \
@@ -37,18 +55,29 @@ cp emoji-wallpaper.py emoji-search.py emoji-story.py \
    emoji-combined-daemon.py ~/.local/bin/
 
 chmod +x ~/.local/bin/emoji-*.py
+
+mkdir -p ~/.cache/emoji-wallpaper
+cp embeddings/*.npy embeddings/*.txt ~/.cache/emoji-wallpaper/
 ```
 
-If using a conda/micromamba env, update the shebang lines on the ML scripts to point to your env's Python:
+If using a venv or conda/micromamba env, update the shebang lines on the ML scripts so they use that env's Python directly (needed when running as a keybind, where `PATH` may not include the activated env):
 
 ```bash
-# e.g. if your env is at ~/micromamba/envs/emojikitchen:
-sed -i '1s|.*|#!/home/$USER/micromamba/envs/emojikitchen/bin/python3|' \
+# venv (path printed by: echo ~/.venv/emojikitchen/bin/python3):
+PYBIN="$HOME/.venv/emojikitchen/bin/python3"
+
+# or conda/micromamba (path printed by: conda run -n emojikitchen which python3):
+PYBIN="$HOME/miniconda3/envs/emojikitchen/bin/python3"
+# or for micromamba:
+PYBIN="$HOME/micromamba/envs/emojikitchen/bin/python3"
+
+sed -i "1s|.*|#!${PYBIN}|" \
   ~/.local/bin/emoji-picker-semantic.py \
   ~/.local/bin/emoji-picker-combined.py \
   ~/.local/bin/emoji-picker-clip.py \
   ~/.local/bin/emoji-search-daemon.py \
-  ~/.local/bin/emoji-combined-daemon.py
+  ~/.local/bin/emoji-combined-daemon.py \
+  ~/.local/bin/emoji-story.py
 ```
 
 ---
@@ -72,38 +101,17 @@ After this step, `emoji-wallpaper.py` and `emoji-search.py` are fully functional
 
 ---
 
-## Step 2 — Build Semantic (MiniLM) Embeddings (~216 MB, ~10 min)
+## Step 2 — Build Semantic (MiniLM) Embeddings *(optional, ~216 MB, ~10 min)*
 
-The semantic search daemon (`emoji-search-daemon.py`) needs text embeddings for all 147k combinations. These are built by encoding the alt text + keywords from the search index with `all-MiniLM-L6-v2`.
+Unlocks the **semantic search** option in `emoji-picker.py` and makes `emoji-picker-semantic.py` functional. Encodes all 147k emoji descriptions with `all-MiniLM-L6-v2` so you can search by meaning rather than exact keywords.
 
-There is no dedicated script in the repo for this — run it with a short Python snippet:
-
-```python
-# build_semantic_embeddings.py
-from pathlib import Path
-import numpy as np
-from sentence_transformers import SentenceTransformer
-
-CACHE = Path.home() / ".cache" / "emoji-wallpaper"
-rows = [line.rstrip("\n").split("\t", 2) for line in open(CACHE / "search-index.tsv")]
-urls  = [r[0] for r in rows if len(r) == 3]
-alts  = [r[1] for r in rows if len(r) == 3]
-texts = [r[2] for r in rows if len(r) == 3]
-
-print(f"Encoding {len(texts):,} entries with all-MiniLM-L6-v2 ...")
-model = SentenceTransformer("all-MiniLM-L6-v2")
-embeddings = model.encode(texts, normalize_embeddings=True,
-                          batch_size=256, show_progress_bar=True)
-
-np.save(CACHE / "embeddings.npy", embeddings)
-(CACHE / "embedding-urls.txt").write_text("\n".join(urls))
-(CACHE / "embedding-alts.txt").write_text("\n".join(alts))
-print("Done.")
-```
+Run the included script (it also builds the search index if Step 1 hasn't been done yet):
 
 ```bash
-python3 build_semantic_embeddings.py
+bash build-semantic-embeddings.sh
 ```
+
+Pass `--force` to rebuild if the embeddings file already exists.
 
 Output files:
 
@@ -119,27 +127,29 @@ After this step, `emoji-picker-semantic.py` and the semantic portion of `emoji-p
 
 ---
 
-## Step 3 — Build CLIP Image Embeddings (~65 MB, ~hours for full set)
+## Step 3 — Build CLIP Image Embeddings *(optional, ~65 MB)*
 
-CLIP embeddings encode the actual images, enabling image-similarity search. There are two approaches:
+Unlocks `emoji-picker-clip.py` and the combined CLIP+MiniLM mode. CLIP encodes the actual images, so you can find results by visual similarity rather than text. There are two approaches:
 
 ### Option A — Quick bootstrap (~8k images already downloaded as thumbnails)
 
 Once you've used the pickers a while and accumulated thumbnails in `~/.cache/emoji-wallpaper/thumbs/`, build CLIP embeddings from those:
 
 ```bash
-emoji-picker-clip.py --build
+bash build-clip-embeddings.sh
 ```
 
-This covers only the cached thumbnails (~8–10k images, ~65 MB output). Enough for good results.
+This covers only the cached thumbnails (~8–10k images, ~65 MB output). Enough for good results. Pass `--force` to rebuild.
 
 ### Option B — Full crawl (all 147k images, ~hours + ~several GB download)
 
+Requires Step 2 to have been run first (needs `embedding-urls.txt`).
+
 ```bash
-crawl_emoji_kitchen.py
+python3 embed-all-emojikitchen-clip.py
 ```
 
-`crawl_emoji_kitchen.py` is not in this repo — it lives in `~/.local/bin/`. Copy it from an existing install or write one using the pattern in `emoji-picker-clip.py`'s `build_embeddings()`. It reads `embedding-urls.txt` as its input list, downloads each image in batches of 64, encodes with `clip-ViT-B-32`, checkpoints every ~4k images, and can be interrupted and resumed.
+Downloads all 147k images on demand in batches of 64, encodes each with `clip-ViT-B-32`, checkpoints every ~4k images, and can be interrupted and resumed. Pass `--reset` to start over.
 
 Output files:
 
@@ -177,14 +187,14 @@ After this step, `emoji-picker-clip.py` and the CLIP portion of `emoji-picker-co
 Add to your i3 or sway config:
 
 ```
-# Best overall: combined CLIP + MiniLM semantic search
-bindsym $mod+shift+e exec --no-startup-id ~/.local/bin/emoji-picker-combined.py
+# Works after Step 1 only — keyword search, no ML required
+bindsym $mod+shift+e exec --no-startup-id python3 ~/.local/bin/emoji-picker.py
 
-# Keyword-only (fast, no ML, works offline after index built)
-bindsym $mod+shift+w exec --no-startup-id python3 ~/.local/bin/emoji-picker.py
-
-# MiniLM semantic only
+# Requires Step 2 — MiniLM semantic search (the picker also exposes this as a menu option)
 bindsym $mod+shift+i exec --no-startup-id ~/.local/bin/emoji-picker-semantic.py
+
+# Requires Steps 2 + 3 — best results, combined CLIP + MiniLM
+bindsym $mod+shift+c exec --no-startup-id ~/.local/bin/emoji-picker-combined.py
 ```
 
 Reload config (`$mod+shift+r`) and the pickers are ready.
@@ -209,14 +219,14 @@ exec --no-startup-id python3 ~/.local/bin/emoji-wallpaper.py
 
 ## Tool Reference
 
-| Script | Requires | What it does |
-|---|---|---|
-| `emoji-wallpaper.py` | Pillow | Daily random wallpaper; also builds search index on first run |
-| `emoji-search.py` | Pillow | CLI search by keyword; `--set N` or `--random` to apply |
-| `emoji-story.py` | Pillow | Converts a phrase into a PNG emoji strip |
-| `emoji-picker.py` | Pillow, rofi | rofi keyword picker → set wallpaper |
-| `emoji-picker-semantic.py` | sentence-transformers, rofi | rofi MiniLM semantic picker |
-| `emoji-picker-clip.py` | sentence-transformers, rofi | rofi CLIP image-similarity picker |
-| `emoji-picker-combined.py` | sentence-transformers, rofi | rofi combined rank-sum picker (best results) |
-| `emoji-search-daemon.py` | sentence-transformers | MiniLM daemon (auto-started, 10 min idle timeout) |
-| `emoji-combined-daemon.py` | sentence-transformers | Combined daemon (auto-started, 10 min idle timeout) |
+| Script | Requires | Optional? | What it does |
+|---|---|---|---|
+| `emoji-wallpaper.py` | Pillow | no | Daily random wallpaper; builds search index on first run |
+| `emoji-search.py` | Pillow | no | CLI search by keyword; `--set N` or `--random` to apply |
+| `emoji-story.py` | Pillow | no | Converts a phrase into a PNG emoji strip |
+| `emoji-picker.py` | Pillow, rofi | no | rofi picker — keyword always available; semantic option appears after Step 2 |
+| `emoji-picker-semantic.py` | sentence-transformers, rofi | yes (Step 2) | rofi MiniLM semantic picker |
+| `emoji-picker-clip.py` | sentence-transformers, rofi | yes (Step 3) | rofi CLIP image-similarity picker |
+| `emoji-picker-combined.py` | sentence-transformers, rofi | yes (Steps 2+3) | rofi combined rank-sum picker (best results) |
+| `emoji-search-daemon.py` | sentence-transformers | yes (Step 2) | MiniLM daemon (auto-started, 10 min idle timeout) |
+| `emoji-combined-daemon.py` | sentence-transformers | yes (Steps 2+3) | Combined daemon (auto-started, 10 min idle timeout) |

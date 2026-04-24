@@ -1,2 +1,6 @@
 micromamba
 __pycache__
+
+# full-size embeddings — too large for repo, keep local only
+embeddings/clip-embeddings.npy
+embeddings/embeddings_old.npy

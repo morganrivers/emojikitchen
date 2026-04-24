@@ -1,4 +1,4 @@
-#!/home/dmrivers/micromamba/envs/4j/bin/python3
+#!/usr/bin/env python3
 """
 Visual emoji kitchen picker via rofi — semantic search version.
 Uses emoji-search-daemon.py for fast semantic search.
@@ -26,17 +26,32 @@ try:
 except ImportError:
     HAS_PIL = False
 
-CACHE_DIR    = Path.home() / ".cache" / "emoji-wallpaper"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
-SOCK_PATH    = CACHE_DIR / "daemon.sock"
-DAEMON_PY    = Path.home() / ".local" / "bin" / "emoji-search-daemon.py"
-THUMB_DIR    = CACHE_DIR / "thumbs"
+CACHE_DIR      = Path.home() / ".cache" / "emoji-wallpaper"
+SEARCH_INDEX   = CACHE_DIR / "search-index.tsv"
+SOCK_PATH      = CACHE_DIR / "daemon.sock"
+DAEMON_PY      = Path.home() / ".local" / "bin" / "emoji-search-daemon.py"
+THUMB_DIR      = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
+OLD_EMBEDDINGS = CACHE_DIR / "embeddings_old.npy"
+OLD_URLS       = CACHE_DIR / "embedding-urls.txt"
+OLD_ALTS       = CACHE_DIR / "embedding-alts.txt"
 
 TILE_SIZE   = 200
 MAX_RESULTS = 5000
 BATCH_SIZE  = 100
 LOAD_MORE   = "⬇  load more results..."
+
+
+def copy_image_to_clipboard(path):
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
+        cmd = ["wl-copy", "--type", "image/png"]
+    elif shutil.which("xclip"):
+        cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
+    else:
+        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        return
+    with open(path, "rb") as f:
+        subprocess.run(cmd, stdin=f, check=True)
 
 
 def _start_daemon():
@@ -142,6 +157,24 @@ def search(entries, query, limit=MAX_RESULTS):
     return keyword_search(entries, query, limit)
 
 
+def old_search(query, limit=MAX_RESULTS):
+    try:
+        import numpy as np
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        return None
+    if not OLD_EMBEDDINGS.exists():
+        return None
+    embeddings = np.load(OLD_EMBEDDINGS).astype(np.float32)
+    urls = OLD_URLS.read_text().splitlines()
+    alts = OLD_ALTS.read_text().splitlines()
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    q_vec = model.encode([query], normalize_embeddings=True)[0]
+    scores = embeddings @ q_vec
+    top_idx = scores.argsort()[::-1][:limit]
+    return [(float(scores[i]), alts[i], urls[i]) for i in top_idx]
+
+
 def get_thumb(url):
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     name = hashlib.md5(url.encode()).hexdigest() + ".png"
@@ -202,16 +235,25 @@ def set_wallpaper(url, alt):
 
 
 def main():
+    use_old = "--old" in sys.argv
+
     if not SEARCH_INDEX.exists():
         subprocess.run(["rofi", "-e", "Search index missing — run emoji-wallpaper.py first."])
         sys.exit(1)
 
-    query = rofi("emoji search:")
+    prompt = "emoji search (old MiniLM):" if use_old else "emoji search:"
+    query = rofi(prompt)
     if not query:
         sys.exit(0)
 
-    entries = load_index()
-    results = search(entries, query)
+    if use_old:
+        results = old_search(query)
+        if results is None:
+            subprocess.run(["rofi", "-e", "embeddings_old.npy not found or ML deps missing."])
+            sys.exit(1)
+    else:
+        entries = load_index()
+        results = search(entries, query)
     if not results:
         rofi(f"No results for '{query}' — press Esc", lines=0)
         sys.exit(0)
@@ -242,11 +284,7 @@ def main():
         if alt == selected:
             thumb = get_thumb(url)
             if thumb:
-                with open(thumb, "rb") as f:
-                    subprocess.run(
-                        ["xclip", "-selection", "clipboard", "-t", "image/png"],
-                        stdin=f, check=True,
-                    )
+                copy_image_to_clipboard(thumb)
             break
 
 
