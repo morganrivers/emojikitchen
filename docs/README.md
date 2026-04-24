@@ -25,7 +25,7 @@ bash install.sh
 
 ## Bind Keys
 
-For i3 or sway, use the full path to the venv's Python so the keybinding works outside an activated shell:
+For i3 or sway, you may need to use the full path to the venv's Python so the keybinding works outside an activated shell if emoji-picker is not recognized by your key-binding detection system:
 
 ```
 bindsym $mod+shift+e exec --no-startup-id /path/to/repo/.venv/bin/python3 /path/to/repo/emoji-picker.py
