@@ -25,15 +25,18 @@ Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 | `emoji-picker-combined.py` | Combines CLIP + MiniLM for best results |
 | `emoji-wallpaper.py` | Sets a random mashup as a tiled wallpaper each day |
 | `emoji-story.py` | Converts text into a PNG strip, one emoji per phrase |
-| `emoji-combined-daemon.py` | Persistent daemon that keeps models loaded in memory |
 
 ## Requirements
 
-- **Python 3.8+** with `venv`
-- **rofi** — the picker UI
-- **feh** or **nitrogen** — for setting wallpapers
-- **curl** — used by the installer
 - Linux with X11 or Wayland
+- **Python 3.8+** with `venv`
+- **curl**: used by the installer
+- **rofi**: the picker UI (`sudo apt install rofi` / `sudo pacman -S rofi`)
+- **xclip** (X11) or **wl-clipboard** (Wayland): for copying emojis to clipboard (`sudo apt install xclip` / `sudo apt install wl-clipboard`)
+
+## Optional
+
+- **feh** or **nitrogen**: for setting wallpapers - if installed, `emoji-wallpaper` sets a random emoji kitchen tile as your desktop background
 
 ## Install
 
@@ -53,7 +56,7 @@ Make sure `~/.local/bin` is on your `PATH`, then run `emoji-picker`.
 
 The base install uses ~370 MB (scripts + embedding data + Python virtualenv).
 
-When you first select **semantic search** or **emoji story** from the rofi menu, a background daemon will automatically download ML models (~340 MB total) — this only happens once:
+When you first select `semantic search` or `emoji story` from the rofi menu, a background daemon will automatically download ML models (~340 MB total) - this only happens once:
 
 Thumbnail images are cached as you browse (~10 KB each) in `~/.local/share/emojikitchen/data/cache/thumbs/`. The cache grows gradually with use but is automatically pruned to stay under 200 MB.
 

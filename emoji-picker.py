@@ -46,7 +46,7 @@ LOAD_MORE  = "⬇  load more results..."
 STORY_PY   = _REPO / "emoji-story.py"
 STORY_OUT  = Path("/tmp/emoji-story.png")
 
-# Base emojis from curated image set — boost these in keyword search results.
+# Base emojis from curated image set - boost these in keyword search results.
 # Any combo containing at least one of these comes before non-priority combos
 # at the same keyword score. Tiebreak within each group is a fixed random order
 # seeded by the combo name so it's stable across runs.
@@ -70,29 +70,31 @@ PRIORITY_EMOJIS = frozenset({
 
 def _keyword_priority(alt):
     """Secondary sort key for keyword search: (not_priority, stable_random).
-    Lower is better — priority combos sort before non-priority at the same score."""
+    Lower is better - priority combos sort before non-priority at the same score."""
     parts = alt.split("-", 1)
     is_priority = any(p in PRIORITY_EMOJIS for p in parts)
     return (0 if is_priority else 1, _random.Random(alt).random())
 
 
-def copy_image_to_clipboard(path):
+def copy_image_to_clipboard(path, notify=None):
     if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
         cmd = ["wl-copy", "--type", "image/png"]
     elif shutil.which("xclip"):
         cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
     else:
-        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        subprocess.run(["rofi", "-e", "No clipboard tool found - install xclip (X11) or wl-clipboard (Wayland)"])
         return
     with open(path, "rb") as f:
         subprocess.run(cmd, stdin=f, check=True)
+    if notify:
+        subprocess.run(["rofi", "-e", notify])
 
 
 def rofi(prompt, entries_with_icons=None, text_entries=None, lines=0):
     """
     Run rofi dmenu.
-      entries_with_icons: list of (label, icon_path_or_None) — shows icon grid.
-      text_entries: list of plain strings — shows filterable text list.
+      entries_with_icons: list of (label, icon_path_or_None) - shows icon grid.
+      text_entries: list of plain strings - shows filterable text list.
     Returns selected label, or None if cancelled.
     """
     cmd = ["rofi", "-dmenu", "-p", prompt]
@@ -125,7 +127,7 @@ def rofi(prompt, entries_with_icons=None, text_entries=None, lines=0):
 
 def _start_daemon():
     subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(75):  # up to 15s — two models to load
+    for _ in range(75):  # up to 15s - two models to load
         time.sleep(0.2)
         if SOCK_PATH.exists():
             try:
@@ -182,7 +184,7 @@ def _score_entry(alt, words, is_single):
     square_score: 1 if this is a X-X combo and the single query word matches X.
     name_score:   count of query words that appear as tokens in the alt name.
     For 2-word queries, name_score==2 means each word matched a different
-    component — the keyword equivalent of the daemon's cross-rank."""
+    component - the keyword equivalent of the daemon's cross-rank."""
     alt_lower = alt.lower()
     alt_tokens = set(re.split(r'[-_]', alt_lower))
     name_score = sum(1 for w in words if w in alt_tokens)
@@ -277,7 +279,7 @@ def pick_base_emoji(base_index, prompt):
     for _hex, (emoji, name) in base_index:
         if selected == f"{emoji} {name}":
             return (emoji, name)
-    # user typed something not in the list — use it as a raw search term
+    # user typed something not in the list - use it as a raw search term
     return ("", selected)
 
 
@@ -313,7 +315,11 @@ def get_thumb(url):
 
 def set_wallpaper(url, alt):
     if not HAS_PIL:
-        subprocess.run(["rofi", "-e", "Pillow not installed — run: pip install Pillow"])
+        subprocess.run(["rofi", "-e", "Pillow not installed - run: pip install Pillow"])
+        return
+    nitrogen_cfg = Path.home() / ".config" / "nitrogen" / "bg-saved.cfg"
+    if not shutil.which("feh") and not shutil.which("nitrogen") and not nitrogen_cfg.exists():
+        subprocess.run(["rofi", "-e", "Install feh or nitrogen to set wallpapers"])
         return
 
     cached = get_thumb(url)
@@ -343,7 +349,6 @@ def set_wallpaper(url, alt):
             wallpaper.paste(emoji_img, (x, y), emoji_img)
     wallpaper.convert("RGB").save(WALLPAPER_PATH)
 
-    nitrogen_cfg = Path.home() / ".config" / "nitrogen" / "bg-saved.cfg"
     if nitrogen_cfg.exists() or shutil.which("nitrogen"):
         try:
             nitrogen_cfg.parent.mkdir(parents=True, exist_ok=True)
@@ -366,27 +371,26 @@ def main():
     entries = load_index()
 
     while True:
-        # Mode selector — only show options whose prerequisites are on disk
+        # Mode selector
         _has_semantic = (
             (DATA_DIR / "base-emoji-sem.npy").exists() and
             ((DATA_DIR / "embeddings.npy").exists() or
              (DATA_DIR / "embeddings-pca340.npy").exists())
         )
-        modes = ["keyword search", "combo"]
-        if _has_semantic:
-            modes.append("semantic search (better, slow)")
-        if STORY_PY.exists():
-            modes.append("emoji story")
+        sem_label   = "semantic search (better, slow)" + ("" if _has_semantic else "  [models not downloaded]")
+        story_label = "emoji story"
+        modes = ["keyword search", "combo", sem_label, story_label]
+
         mode = rofi("emoji:", text_entries=modes)
         if not mode:
             sys.exit(0)
 
-        if mode == "emoji story":
+        if mode == story_label:
             text = rofi("story text:")
             if not text:
                 continue
             subprocess.run([sys.executable, str(STORY_PY), "--output", str(STORY_OUT), text], check=True)
-            subprocess.Popen(["firefox", str(STORY_OUT)])
+            copy_image_to_clipboard(str(STORY_OUT), notify="Story copied to clipboard")
             break
 
         if mode == "combo":
@@ -404,7 +408,7 @@ def main():
 
             results = search(entries, f"{term1} {term2}")
             if not results:
-                rofi(f"No results for '{term1} {term2}' — press Esc", lines=0)
+                rofi(f"No results for '{term1} {term2}' - press Esc", lines=0)
                 continue  # back to start
 
             exact_alts = {f"{term1}-{term2}".lower(), f"{term2}-{term1}".lower()}
@@ -414,14 +418,17 @@ def main():
 
             patterns = [re.compile(re.escape(term1)), re.compile(re.escape(term2))]
             query_label = f"'{term1}+{term2}'"
-        elif mode == "semantic search (better, slow)":
+        elif mode == sem_label:
+            if not _has_semantic:
+                rofi("Semantic models not downloaded - select this again after first run to trigger download", lines=0)
+                continue
             query = rofi("emoji search (semantic):")
             if not query:
                 continue  # back to start
 
             results = query_daemon(query)
             if not results:
-                rofi("Search daemon unavailable — press Esc", lines=0)
+                rofi("Search daemon unavailable - press Esc", lines=0)
                 continue  # back to start
 
             patterns = []
@@ -437,13 +444,13 @@ def main():
 
             results = search(entries, query)
             if not results:
-                rofi(f"No results for '{query}' — press Esc", lines=0)
+                rofi(f"No results for '{query}' - press Esc", lines=0)
                 continue  # back to start
 
             patterns = [re.compile(r'\b' + re.escape(w) + r'\b') for w in query.lower().split()]
             query_label = f"'{query}'"
 
-        # Show results in batches — Escape goes back to start
+        # Show results in batches - Escape goes back to start
         selected = None
         offset = 0
         while True:
@@ -476,7 +483,7 @@ def main():
             if alt == selected_alt:
                 thumb = get_thumb(url)
                 if thumb:
-                    copy_image_to_clipboard(thumb)
+                    copy_image_to_clipboard(thumb, notify="Copied to clipboard")
                 break
         _trim_thumb_cache()
         break  # done

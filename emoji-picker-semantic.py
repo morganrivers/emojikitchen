@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Visual emoji kitchen picker via rofi — semantic search version.
+Visual emoji kitchen picker via rofi - semantic search version.
 Uses emoji-search-daemon.py for fast semantic search.
 Falls back to keyword search if daemon unavailable.
 
@@ -50,7 +50,7 @@ def copy_image_to_clipboard(path):
     elif shutil.which("xclip"):
         cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
     else:
-        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        subprocess.run(["rofi", "-e", "No clipboard tool found - install xclip (X11) or wl-clipboard (Wayland)"])
         return
     with open(path, "rb") as f:
         subprocess.run(cmd, stdin=f, check=True)
@@ -100,7 +100,7 @@ def _query_daemon(query, limit=MAX_RESULTS):
             if isinstance(results, list):
                 return [(r["score"], r["alt"], r["url"]) for r in results]
         except Exception:
-            # Socket stale or daemon died — remove and retry once
+            # Socket stale or daemon died - remove and retry once
             if SOCK_PATH.exists():
                 SOCK_PATH.unlink()
     return None
@@ -209,7 +209,7 @@ def get_thumb(url):
 
 def set_wallpaper(url, alt):
     if not HAS_PIL:
-        subprocess.run(["rofi", "-e", "Pillow not installed — run: pip install Pillow"])
+        subprocess.run(["rofi", "-e", "Pillow not installed - run: pip install Pillow"])
         return
 
     cached = get_thumb(url)
@@ -258,7 +258,7 @@ def main():
     use_old = "--old" in sys.argv
 
     if not SEARCH_INDEX.exists():
-        subprocess.run(["rofi", "-e", "Search index missing — run emoji-wallpaper.py first."])
+        subprocess.run(["rofi", "-e", "Search index missing - run emoji-wallpaper.py first."])
         sys.exit(1)
 
     prompt = "emoji search (old MiniLM):" if use_old else "emoji search:"
@@ -275,7 +275,7 @@ def main():
         entries = load_index()
         results = search(entries, query)
     if not results:
-        rofi(f"No results for '{query}' — press Esc", lines=0)
+        rofi(f"No results for '{query}' - press Esc", lines=0)
         sys.exit(0)
 
     offset = 0

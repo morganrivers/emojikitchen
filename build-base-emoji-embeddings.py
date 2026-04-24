@@ -88,7 +88,7 @@ def main():
     force = "--force" in sys.argv
 
     if not SEARCH_INDEX.exists():
-        print("search-index.tsv not found — run emoji-wallpaper.py first.")
+        print("search-index.tsv not found - run emoji-wallpaper.py first.")
         sys.exit(1)
 
     if SEM_FILE.exists() and CLIP_FILE.exists() and not force:

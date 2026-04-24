@@ -50,7 +50,7 @@ VENV="$INSTALL_DIR/.venv"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)" || true
 if [ -f "$SCRIPT_DIR/emoji-picker.py" ]; then
-    # Running from inside the repo — use it in place
+    # Running from inside the repo - use it in place
     INSTALL_DIR="$SCRIPT_DIR"
     VENV="$INSTALL_DIR/.venv"
     echo "Using local repo at $INSTALL_DIR"
@@ -65,7 +65,6 @@ else
         emoji-picker-combined.py \
         emoji-wallpaper.py \
         emoji-story.py \
-        emoji-combined-daemon.py \
         emoji-search-daemon.py \
         emoji-split-daemon.py \
         requirements.txt

@@ -14,7 +14,7 @@ if ! python3 -c "import numpy, sentence_transformers" 2>/dev/null; then
 fi
 
 if [ ! -f "$INDEX" ]; then
-    echo "Search index not found — building it now (~94 MB download)..."
+    echo "Search index not found - building it now (~94 MB download)..."
     python3 "$REPO/emoji-wallpaper.py"
 fi
 
@@ -27,7 +27,7 @@ fi
 if [ -f "$EMBEDDINGS" ]; then
     BACKUP="$DATA_DIR/embeddings_old.npy"
     if [ -f "$BACKUP" ]; then
-        echo "Backup already exists at $BACKUP — not overwriting"
+        echo "Backup already exists at $BACKUP - not overwriting"
     else
         cp "$EMBEDDINGS" "$BACKUP"
         echo "Backed up existing embeddings to embeddings_old.npy"

@@ -6,14 +6,14 @@ CLIP:  512 → 256 dims  (~72 MB → fits GitHub)
 Text:  384 → 340 dims  (108 MB → ~95 MB, fits GitHub)
 
 Outputs (CLIP):
-  clip-embeddings-pca256.npy    — compressed embeddings (float16)
-  clip-pca256-matrix.npy        — 512×256 projection matrix (float32)
-  clip-pca256-mean.npy          — mean vector (float32)
+  clip-embeddings-pca256.npy    - compressed embeddings (float16)
+  clip-pca256-matrix.npy        - 512×256 projection matrix (float32)
+  clip-pca256-mean.npy          - mean vector (float32)
 
 Outputs (text):
-  embeddings-pca340.npy         — compressed embeddings (float16)
-  embeddings-pca340-matrix.npy  — 384×340 projection matrix (float32)
-  embeddings-pca340-mean.npy    — mean vector (float32)
+  embeddings-pca340.npy         - compressed embeddings (float16)
+  embeddings-pca340-matrix.npy  - 384×340 projection matrix (float32)
+  embeddings-pca340-mean.npy    - mean vector (float32)
 
 Usage:
   python3 compress-clip-embeddings.py            # both CLIP + text
@@ -42,7 +42,7 @@ do_text = "--clip-only" not in sys.argv
 
 def compress(embeddings_path, dims, prefix):
     if not embeddings_path.exists():
-        print(f"{embeddings_path.name} not found — skipping.")
+        print(f"{embeddings_path.name} not found - skipping.")
         return
     print(f"Loading {embeddings_path.name} ...", flush=True)
     embeddings = np.load(embeddings_path).astype(np.float32)

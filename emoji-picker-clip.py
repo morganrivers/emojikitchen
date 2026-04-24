@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Visual emoji kitchen picker via rofi — CLIP image search.
+Visual emoji kitchen picker via rofi - CLIP image search.
 Encodes cached thumbnail images with CLIP; queries with text.
 On first run, builds embeddings from whatever thumbs are cached (~8k).
 
@@ -60,7 +60,7 @@ def copy_image_to_clipboard(path):
     elif shutil.which("xclip"):
         cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
     else:
-        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        subprocess.run(["rofi", "-e", "No clipboard tool found - install xclip (X11) or wl-clipboard (Wayland)"])
         return
     with open(path, "rb") as f:
         subprocess.run(cmd, stdin=f, check=True)
@@ -124,7 +124,7 @@ def load_or_build(use_pca=False):
     model = TextEmbedding("Qdrant/clip-ViT-B-32-text")
     if use_pca:
         if not CLIP_PCA_EMBEDDINGS.exists():
-            subprocess.run(["rofi", "-e", "PCA embeddings not found — run compress-clip-embeddings.py first."])
+            subprocess.run(["rofi", "-e", "PCA embeddings not found - run compress-clip-embeddings.py first."])
             sys.exit(1)
         embeddings = np.load(CLIP_PCA_EMBEDDINGS)
         pca_matrix = np.load(CLIP_PCA_MATRIX)
@@ -134,7 +134,7 @@ def load_or_build(use_pca=False):
         return model, embeddings, alts, urls, pca_matrix, pca_mean
     if not CLIP_EMBEDDINGS.exists():
         if not HAS_BUILD:
-            subprocess.run(["rofi", "-e", "Build deps missing — run: pip install Pillow sentence-transformers torch"])
+            subprocess.run(["rofi", "-e", "Build deps missing - run: pip install Pillow sentence-transformers torch"])
             sys.exit(1)
         embs = build_embeddings()
         return embs + (None, None)
@@ -273,7 +273,7 @@ def main():
         return
 
     if not SEARCH_INDEX.exists():
-        subprocess.run(["rofi", "-e", "Search index missing — run emoji-wallpaper.py first."])
+        subprocess.run(["rofi", "-e", "Search index missing - run emoji-wallpaper.py first."])
         sys.exit(1)
 
     model, embeddings, alts, urls, pca_matrix, pca_mean = load_or_build(use_pca)

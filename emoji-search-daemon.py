@@ -47,11 +47,11 @@ def load():
         pca_mean   = np.load(EMBEDDINGS_PCA_MEAN).astype(np.float32)
         print(f"  using PCA embeddings ({embeddings.shape[1]} dims)", flush=True)
     else:
-        print("No embeddings found — run build-semantic-embeddings.sh first.", flush=True)
+        print("No embeddings found - run build-semantic-embeddings.sh first.", flush=True)
         sys.exit(1)
     alts = EMBEDDING_ALTS_FILE.read_text().splitlines()
     urls = EMBEDDING_URLS_FILE.read_text().splitlines()
-    print(f"Ready — {len(alts):,} combinations.", flush=True)
+    print(f"Ready - {len(alts):,} combinations.", flush=True)
     return model, embeddings, pca_matrix, pca_mean, alts, urls
 
 
@@ -105,7 +105,7 @@ def main():
             try:
                 conn, _ = server.accept()
             except socket.timeout:
-                print("Idle timeout — exiting.", flush=True)
+                print("Idle timeout - exiting.", flush=True)
                 break
             threading.Thread(
                 target=handle,

@@ -3,10 +3,10 @@
 Split-query search daemon.
 Counts words in the query and dispatches differently for 1 or 2 words:
 
-  1 word  — scores base emojis, returns squared combo (emoji-emoji) first
-  2 words — scores base emojis per word, cross-ranks all kitchen combos by
+  1 word  - scores base emojis, returns squared combo (emoji-emoji) first
+  2 words - scores base emojis per word, cross-ranks all kitchen combos by
              min(rank_w1[a]+rank_w2[b], rank_w1[b]+rank_w2[a]), prepends results
-  3+ words — standard rank-sum combined search only
+  3+ words - standard rank-sum combined search only
 
 In all cases, decomposed results are prepended to a full combined-search
 fallback so the picker always has a complete ranked list.
@@ -61,7 +61,7 @@ IDLE_TIMEOUT = 600
 def load():
     for f in (BASE_CODES, BASE_NAMES, BASE_SEM, BASE_CLIP):
         if not f.exists():
-            print(f"Missing {f.name} — run build-base-emoji-embeddings.py first.", flush=True)
+            print(f"Missing {f.name} - run build-base-emoji-embeddings.py first.", flush=True)
             sys.exit(1)
 
     print("Loading models...", flush=True)
@@ -117,7 +117,7 @@ def load():
     idx_map = {u: i for i, u in enumerate(sem_urls_all)}
     sem_emb = sem_emb_full[[idx_map[u] for u in clip_urls if u in idx_map]]
 
-    print(f"Ready — {len(base_codes)} base emojis, {len(combo_map):,} combos.", flush=True)
+    print(f"Ready - {len(base_codes)} base emojis, {len(combo_map):,} combos.", flush=True)
     return (sem_model, clip_model,
             base_sem_emb, base_clip_emb, code_to_idx, combo_map,
             sem_emb, sem_pca_matrix, sem_pca_mean,
@@ -138,7 +138,7 @@ def decompose_one(word, sem_model, clip_model,
     ranks = rank_base(word, sem_model, clip_model, base_sem_emb, base_clip_emb)
     best  = int(ranks.argmin())
     # find best code from combo_map keys that correspond to index `best`
-    # (we need the actual code string — recover via sorted order matching build script)
+    # (we need the actual code string - recover via sorted order matching build script)
     # We stored code_to_idx during load; use a reverse lookup passed in via closure
     return ranks, best
 
@@ -272,7 +272,7 @@ def main():
             try:
                 conn, _ = server.accept()
             except socket.timeout:
-                print("Idle timeout — exiting.", flush=True)
+                print("Idle timeout - exiting.", flush=True)
                 break
             threading.Thread(
                 target=handle,

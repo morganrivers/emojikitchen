@@ -15,7 +15,7 @@ if ! python3 -c "import numpy, PIL, sentence_transformers" 2>/dev/null; then
 fi
 
 if [ ! -f "$INDEX" ]; then
-    echo "Search index not found — building it now (~94 MB download)..."
+    echo "Search index not found - building it now (~94 MB download)..."
     python3 "$REPO/emoji-wallpaper.py"
 fi
 

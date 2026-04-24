@@ -31,8 +31,8 @@ _REPO          = Path(__file__).resolve().parent
 CACHE_DIR      = _REPO / "data" / "cache"
 THUMB_DIR      = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
-SOCK_PATH      = CACHE_DIR / "combined-daemon.sock"
-DAEMON_PY      = _REPO / "emoji-combined-daemon.py"
+SOCK_PATH      = CACHE_DIR / "split-daemon.sock"
+DAEMON_PY      = _REPO / "emoji-split-daemon.py"
 
 TILE_SIZE   = 200
 MAX_RESULTS = 5000
@@ -46,7 +46,7 @@ def copy_image_to_clipboard(path):
     elif shutil.which("xclip"):
         cmd = ["xclip", "-selection", "clipboard", "-t", "image/png"]
     else:
-        subprocess.run(["rofi", "-e", "No clipboard tool found — install xclip (X11) or wl-clipboard (Wayland)"])
+        subprocess.run(["rofi", "-e", "No clipboard tool found - install xclip (X11) or wl-clipboard (Wayland)"])
         return
     with open(path, "rb") as f:
         subprocess.run(cmd, stdin=f, check=True)
@@ -54,7 +54,7 @@ def copy_image_to_clipboard(path):
 
 def _start_daemon():
     subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(75):  # up to 15s — two models to load
+    for _ in range(75):  # up to 15s - two models to load
         time.sleep(0.2)
         if SOCK_PATH.exists():
             try:
@@ -153,7 +153,7 @@ def get_thumb(url):
 
 def set_wallpaper(url, alt):
     if not HAS_PIL:
-        subprocess.run(["rofi", "-e", "Pillow not installed — run: pip install Pillow"])
+        subprocess.run(["rofi", "-e", "Pillow not installed - run: pip install Pillow"])
         return
     cached = get_thumb(url)
     if not cached:
@@ -205,7 +205,7 @@ def main():
 
     results = query_daemon(query)
     if not results:
-        rofi("Search daemon unavailable — press Esc", lines=0)
+        rofi("Search daemon unavailable - press Esc", lines=0)
         sys.exit(1)
 
     offset = 0

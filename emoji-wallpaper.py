@@ -146,7 +146,7 @@ def build_wallpaper(emoji_img, width, height, tile_size=TILE_SIZE):
 
 
 def set_wallpaper(path):
-    # nitrogen (i3, openbox, etc.) — write config directly then restore
+    # nitrogen (i3, openbox, etc.) - write config directly then restore
     nitrogen_cfg = Path.home() / ".config" / "nitrogen" / "bg-saved.cfg"
     if nitrogen_cfg.exists() or shutil.which("nitrogen"):
         try:

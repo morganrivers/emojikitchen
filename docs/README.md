@@ -19,7 +19,7 @@ cd emojikitchen
 bash install.sh
 ```
 
-`install.sh` creates a `.venv`, installs `requirements.txt` (`Pillow`, `numpy`, `fastembed`), and symlinks all scripts into `~/.local/bin`. All embedding data is included in the repo — no separate download step needed.
+`install.sh` creates a `.venv`, installs `requirements.txt` (`Pillow`, `numpy`, `fastembed`), and symlinks all scripts into `~/.local/bin`. All embedding data is included in the repo - no separate download step needed.
 
 ---
 
@@ -35,17 +35,17 @@ All pickers work immediately after install. `emoji-picker.py` offers keyword sea
 
 ---
 
-## Optional — Rebuild Embeddings
+## Optional - Rebuild Embeddings
 
 The repo ships with pre-built embeddings. You only need these if you want to regenerate them from scratch.
 
-**Semantic (MiniLM) embeddings** — ~10 min, requires `sentence-transformers`:
+**Semantic (MiniLM) embeddings** - ~10 min, requires `sentence-transformers`:
 ```bash
 pip install sentence-transformers
 bash build-semantic-embeddings.sh
 ```
 
-**CLIP image embeddings** — builds from cached thumbnails:
+**CLIP image embeddings** - builds from cached thumbnails:
 ```bash
 pip install sentence-transformers
 bash build-clip-embeddings.sh
@@ -81,7 +81,7 @@ Or via crontab:
 | `data/embeddings/clip-embeddings-pca256.npy` | 72 MB | CLIP image embeddings (PCA-compressed) |
 | `data/cache/thumbs/` | grows with use | Downloaded thumbnails |
 
-Full-size embeddings (`embeddings.npy`, `clip-embeddings.npy`) are gitignored — only the PCA-compressed versions ship with the repo.
+Full-size embeddings (`embeddings.npy`, `clip-embeddings.npy`) are gitignored - only the PCA-compressed versions ship with the repo.
 
 **Model downloads** (one-time, stored in `~/.cache/`):
 
@@ -99,9 +99,8 @@ Full-size embeddings (`embeddings.npy`, `clip-embeddings.npy`) are gitignored �
 | `emoji-wallpaper.py` | Daily random wallpaper |
 | `emoji-search.py` | CLI search; `--set N` or `--random` to apply wallpaper |
 | `emoji-story.py` | Converts a phrase into a PNG emoji strip |
-| `emoji-picker.py` | rofi picker — keyword + semantic search |
+| `emoji-picker.py` | rofi picker - keyword + semantic search |
 | `emoji-picker-semantic.py` | rofi semantic-only picker |
 | `emoji-picker-clip.py` | rofi CLIP image-similarity picker |
 | `emoji-picker-combined.py` | rofi combined CLIP + MiniLM picker (best results) |
 | `emoji-search-daemon.py` | MiniLM daemon (auto-started, 10 min idle timeout) |
-| `emoji-combined-daemon.py` | Combined daemon (auto-started, 10 min idle timeout) |
