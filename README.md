@@ -20,11 +20,8 @@ Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 
 | Script | What it does |
 |---|---|
-| `emoji-picker.py` | Keyword search → rofi thumbnail grid → set as wallpaper |
-| `emoji-picker-semantic.py` | Same, using sentence embeddings for fuzzy matching |
-| `emoji-picker-combined.py` | Combines CLIP + MiniLM for best results |
+| `emoji-picker.py` | Search and combine emojis using a fast sloppy, or slow accurate method |
 | `emoji-wallpaper.py` | Sets a random mashup as a tiled wallpaper each day |
-| `emoji-story.py` | Converts text into a PNG strip, one emoji per phrase |
 
 ## Requirements
 
