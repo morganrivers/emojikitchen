@@ -13,6 +13,7 @@ import sys
 import os
 import re
 import json
+import random as _random
 import shutil
 import hashlib
 import socket
@@ -28,20 +29,51 @@ try:
 except ImportError:
     HAS_PIL = False
 
-CACHE_DIR = Path.home() / ".cache" / "emoji-wallpaper"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
-THUMB_DIR = CACHE_DIR / "thumbs"
-WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
-WALLPAPER_SCRIPT = Path.home() / ".local" / "bin" / "emoji-wallpaper.py"
-SOCK_PATH = CACHE_DIR / "split-daemon.sock"
-DAEMON_PY = Path.home() / ".local" / "bin" / "emoji-split-daemon.py"
+_REPO        = Path(__file__).resolve().parent
+DATA_DIR     = _REPO / "data" / "embeddings"
+CACHE_DIR    = _REPO / "data" / "cache"
+SEARCH_INDEX = DATA_DIR / "search-index.tsv"
+THUMB_DIR    = CACHE_DIR / "thumbs"
+WALLPAPER_PATH   = CACHE_DIR / "wallpaper.png"
+WALLPAPER_SCRIPT = _REPO / "emoji-wallpaper.py"
+SOCK_PATH    = CACHE_DIR / "split-daemon.sock"
+DAEMON_PY    = _REPO / "emoji-split-daemon.py"
 
 TILE_SIZE = 200
 MAX_RESULTS = 5000
 BATCH_SIZE = 100
 LOAD_MORE  = "⬇  load more results..."
-STORY_PY   = Path.home() / ".local" / "bin" / "emoji-story.py"
+STORY_PY   = _REPO / "emoji-story.py"
 STORY_OUT  = Path("/tmp/emoji-story.png")
+
+# Base emojis from curated image set — boost these in keyword search results.
+# Any combo containing at least one of these comes before non-priority combos
+# at the same keyword score. Tiebreak within each group is a fixed random order
+# seeded by the combo name so it's stable across runs.
+PRIORITY_EMOJIS = frozenset({
+    "100", "bird", "boom", "bouquet", "brain", "broccoli", "car", "carrot",
+    "cat", "city_sunrise", "cloud", "coconut", "coffee", "computer",
+    "crystal_ball", "dango", "derelict_house_building", "dragon", "earth_africa",
+    "exclamation", "exploding_head", "face_with_raised_eyebrow",
+    "face_with_rolling_eyes", "facepunch", "fire", "fish", "frog",
+    "glass_of_milk", "goose", "headphones", "hearts", "hole", "hot_pepper",
+    "house", "imp", "iphone", "koala", "last_quarter_moon_with_face", "lemon",
+    "lightning", "llama", "low_battery", "magic_wand", "milky_way", "mouse",
+    "musical_keyboard", "national_park", "neutral_face", "octopus", "ok",
+    "parachute", "people_hugging", "pleading_face", "rain_cloud", "rainbow",
+    "relieved", "shrug", "skunk", "snail", "sob", "sparkling_heart",
+    "sunrise_over_mountains", "sunglasses", "sushi", "taco", "tiger", "tornado",
+    "tropical_drink", "tulip", "turtle", "unicorn_face", "upside_down_face",
+    "volcano", "whale", "white_check_mark", "wood", "yum",
+})
+
+
+def _keyword_priority(alt):
+    """Secondary sort key for keyword search: (not_priority, stable_random).
+    Lower is better — priority combos sort before non-priority at the same score."""
+    parts = alt.split("-", 1)
+    is_priority = any(p in PRIORITY_EMOJIS for p in parts)
+    return (0 if is_priority else 1, _random.Random(alt).random())
 
 
 def copy_image_to_clipboard(path):
@@ -92,7 +124,7 @@ def rofi(prompt, entries_with_icons=None, text_entries=None, lines=0):
 
 
 def _start_daemon():
-    subprocess.Popen([str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(75):  # up to 15s — two models to load
         time.sleep(0.2)
         if SOCK_PATH.exists():
@@ -144,26 +176,46 @@ def load_index():
     return entries
 
 
+def _score_entry(alt, words, is_single):
+    """Return (square_score, name_score) for a combo alt and query words.
+
+    square_score: 1 if this is a X-X combo and the single query word matches X.
+    name_score:   count of query words that appear as tokens in the alt name.
+    For 2-word queries, name_score==2 means each word matched a different
+    component — the keyword equivalent of the daemon's cross-rank."""
+    alt_lower = alt.lower()
+    alt_tokens = set(re.split(r'[-_]', alt_lower))
+    name_score = sum(1 for w in words if w in alt_tokens)
+    square_score = 0
+    if is_single:
+        parts = alt_lower.split('-', 1)
+        if len(parts) == 2 and parts[0] == parts[1]:
+            if words[0] in set(parts[0].split('_')):
+                square_score = 1
+    return square_score, name_score
+
+
 def search(entries, query, limit=MAX_RESULTS):
     words = query.lower().split()
     patterns = [re.compile(r'\b' + re.escape(w) + r'\b') for w in words]
+    is_single = len(words) == 1
     scored = []
     for url, alt, text in entries:
-        haystack = text.lower()
-        score = sum(1 for p in patterns if p.search(haystack))
-        if score > 0:
-            scored.append((score, alt, url, text))
-    scored.sort(key=lambda x: -x[0])
+        text_score = sum(1 for p in patterns if p.search(text.lower()))
+        if text_score > 0:
+            sq, ns = _score_entry(alt, words, is_single)
+            scored.append((sq, ns, text_score, alt, url, text))
+    scored.sort(key=lambda x: (-x[0], -x[1], -x[2], _keyword_priority(x[3])))
     if scored:
-        return scored[:limit]
+        return [(ts, alt, url, text) for _, _, ts, alt, url, text in scored[:limit]]
     # fallback: substring match
     for url, alt, text in entries:
-        haystack = text.lower()
-        score = sum(1 for w in words if w in haystack)
-        if score > 0:
-            scored.append((score, alt, url, text))
-    scored.sort(key=lambda x: -x[0])
-    return scored[:limit]
+        text_score = sum(1 for w in words if w in text.lower())
+        if text_score > 0:
+            sq, ns = _score_entry(alt, words, is_single)
+            scored.append((sq, ns, text_score, alt, url, text))
+    scored.sort(key=lambda x: (-x[0], -x[1], -x[2], _keyword_priority(x[3])))
+    return [(ts, alt, url, text) for _, _, ts, alt, url, text in scored[:limit]]
 
 
 def _xml_escape(s):
@@ -227,6 +279,24 @@ def pick_base_emoji(base_index, prompt):
             return (emoji, name)
     # user typed something not in the list — use it as a raw search term
     return ("", selected)
+
+
+_THUMB_LIMIT = 200 * 1024 * 1024  # 200 MB
+
+def _trim_thumb_cache():
+    entries, total = [], 0
+    for p in THUMB_DIR.glob("*.png"):
+        st = p.stat()
+        entries.append((st.st_mtime, st.st_size, p))
+        total += st.st_size
+    if total <= _THUMB_LIMIT:
+        return
+    entries.sort()
+    for _, size, p in entries:
+        if total <= _THUMB_LIMIT:
+            break
+        p.unlink(missing_ok=True)
+        total -= size
 
 
 def get_thumb(url):
@@ -298,9 +368,9 @@ def main():
     while True:
         # Mode selector — only show options whose prerequisites are on disk
         _has_semantic = (
-            (CACHE_DIR / "base-emoji-sem.npy").exists() and
-            ((CACHE_DIR / "embeddings.npy").exists() or
-             (CACHE_DIR / "embeddings-pca340.npy").exists())
+            (DATA_DIR / "base-emoji-sem.npy").exists() and
+            ((DATA_DIR / "embeddings.npy").exists() or
+             (DATA_DIR / "embeddings-pca340.npy").exists())
         )
         modes = ["keyword search", "combo"]
         if _has_semantic:
@@ -337,6 +407,11 @@ def main():
                 rofi(f"No results for '{term1} {term2}' — press Esc", lines=0)
                 continue  # back to start
 
+            exact_alts = {f"{term1}-{term2}".lower(), f"{term2}-{term1}".lower()}
+            exact = [r for r in results if r[1].lower() in exact_alts]
+            rest  = [r for r in results if r[1].lower() not in exact_alts]
+            results = exact + rest
+
             patterns = [re.compile(re.escape(term1)), re.compile(re.escape(term2))]
             query_label = f"'{term1}+{term2}'"
         elif mode == "semantic search (better, slow)":
@@ -352,9 +427,13 @@ def main():
             patterns = []
             query_label = f"'{query}' (semantic)"
         else:
-            query = rofi("emoji search:")
-            if not query:
-                continue  # back to start
+            # If the user typed something not in the mode list, use it directly
+            if mode == "keyword search":
+                query = rofi("emoji search:")
+                if not query:
+                    continue  # back to start
+            else:
+                query = mode
 
             results = search(entries, query)
             if not results:
@@ -399,6 +478,7 @@ def main():
                 if thumb:
                     copy_image_to_clipboard(thumb)
                 break
+        _trim_thumb_cache()
         break  # done
 
 

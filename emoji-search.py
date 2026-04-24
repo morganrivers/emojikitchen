@@ -17,10 +17,12 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
-CACHE_DIR = Path.home() / ".cache" / "emoji-wallpaper"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
-WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
-WALLPAPER_SCRIPT = Path.home() / ".local" / "bin" / "emoji-wallpaper.py"
+_REPO        = Path(__file__).resolve().parent
+DATA_DIR     = _REPO / "data" / "embeddings"
+CACHE_DIR    = _REPO / "data" / "cache"
+SEARCH_INDEX = DATA_DIR / "search-index.tsv"
+WALLPAPER_PATH   = CACHE_DIR / "wallpaper.png"
+WALLPAPER_SCRIPT = _REPO / "emoji-wallpaper.py"
 
 try:
     from PIL import Image

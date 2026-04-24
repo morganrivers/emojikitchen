@@ -26,15 +26,17 @@ try:
 except ImportError:
     HAS_PIL = False
 
-CACHE_DIR      = Path.home() / ".cache" / "emoji-wallpaper"
-SEARCH_INDEX   = CACHE_DIR / "search-index.tsv"
+_REPO          = Path(__file__).resolve().parent
+DATA_DIR       = _REPO / "data" / "embeddings"
+CACHE_DIR      = _REPO / "data" / "cache"
+SEARCH_INDEX   = DATA_DIR / "search-index.tsv"
 SOCK_PATH      = CACHE_DIR / "daemon.sock"
-DAEMON_PY      = Path.home() / ".local" / "bin" / "emoji-search-daemon.py"
+DAEMON_PY      = _REPO / "emoji-search-daemon.py"
 THUMB_DIR      = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
-OLD_EMBEDDINGS = CACHE_DIR / "embeddings_old.npy"
-OLD_URLS       = CACHE_DIR / "embedding-urls.txt"
-OLD_ALTS       = CACHE_DIR / "embedding-alts.txt"
+OLD_EMBEDDINGS = DATA_DIR / "embeddings_old.npy"
+OLD_URLS       = DATA_DIR / "embedding-urls.txt"
+OLD_ALTS       = DATA_DIR / "embedding-alts.txt"
 
 TILE_SIZE   = 200
 MAX_RESULTS = 5000
@@ -175,6 +177,24 @@ def old_search(query, limit=MAX_RESULTS):
     return [(float(scores[i]), alts[i], urls[i]) for i in top_idx]
 
 
+_THUMB_LIMIT = 200 * 1024 * 1024  # 200 MB
+
+def _trim_thumb_cache():
+    entries, total = [], 0
+    for p in THUMB_DIR.glob("*.png"):
+        st = p.stat()
+        entries.append((st.st_mtime, st.st_size, p))
+        total += st.st_size
+    if total <= _THUMB_LIMIT:
+        return
+    entries.sort()
+    for _, size, p in entries:
+        if total <= _THUMB_LIMIT:
+            break
+        p.unlink(missing_ok=True)
+        total -= size
+
+
 def get_thumb(url):
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     name = hashlib.md5(url.encode()).hexdigest() + ".png"
@@ -285,6 +305,9 @@ def main():
             thumb = get_thumb(url)
             if thumb:
                 copy_image_to_clipboard(thumb)
+            break
+
+    _trim_thumb_cache()
             break
 
 

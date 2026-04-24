@@ -19,14 +19,16 @@ import numpy as np
 from pathlib import Path
 from fastembed import TextEmbedding
 
-CACHE_DIR           = Path.home() / ".cache" / "emoji-wallpaper"
+_REPO               = Path(__file__).resolve().parent
+DATA_DIR            = _REPO / "data" / "embeddings"
+CACHE_DIR           = _REPO / "data" / "cache"
 SOCK_PATH           = CACHE_DIR / "daemon.sock"
-EMBEDDINGS_FILE     = CACHE_DIR / "embeddings.npy"
-EMBEDDINGS_PCA      = CACHE_DIR / "embeddings-pca340.npy"
-EMBEDDINGS_PCA_MAT  = CACHE_DIR / "embeddings-pca340-matrix.npy"
-EMBEDDINGS_PCA_MEAN = CACHE_DIR / "embeddings-pca340-mean.npy"
-EMBEDDING_URLS_FILE = CACHE_DIR / "embedding-urls.txt"
-EMBEDDING_ALTS_FILE = CACHE_DIR / "embedding-alts.txt"
+EMBEDDINGS_FILE     = DATA_DIR / "embeddings.npy"
+EMBEDDINGS_PCA      = DATA_DIR / "embeddings-pca340.npy"
+EMBEDDINGS_PCA_MAT  = DATA_DIR / "embeddings-pca340-matrix.npy"
+EMBEDDINGS_PCA_MEAN = DATA_DIR / "embeddings-pca340-mean.npy"
+EMBEDDING_URLS_FILE = DATA_DIR / "embedding-urls.txt"
+EMBEDDING_ALTS_FILE = DATA_DIR / "embedding-alts.txt"
 IDLE_TIMEOUT        = 600  # seconds
 
 

@@ -27,13 +27,15 @@ from pathlib import Path
 
 import numpy as np
 
-CACHE_DIR    = Path.home() / ".cache" / "emoji-wallpaper"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
+_REPO        = Path(__file__).resolve().parent
+DATA_DIR     = _REPO / "data" / "embeddings"
+CACHE_DIR    = _REPO / "data" / "cache"
+SEARCH_INDEX = DATA_DIR / "search-index.tsv"
 THUMB_DIR    = CACHE_DIR / "base-emoji-thumbs"
-CODES_FILE   = CACHE_DIR / "base-emoji-codes.txt"
-NAMES_FILE   = CACHE_DIR / "base-emoji-names.txt"
-SEM_FILE     = CACHE_DIR / "base-emoji-sem.npy"
-CLIP_FILE    = CACHE_DIR / "base-emoji-clip.npy"
+CODES_FILE   = DATA_DIR / "base-emoji-codes.txt"
+NAMES_FILE   = DATA_DIR / "base-emoji-names.txt"
+SEM_FILE     = DATA_DIR / "base-emoji-sem.npy"
+CLIP_FILE    = DATA_DIR / "base-emoji-clip.npy"
 
 NOTO_BASE = "https://fonts.gstatic.com/s/e/notoemoji/latest/{code}/512.png"
 

@@ -22,11 +22,13 @@ except ImportError:
     print("Error: Pillow is required. Install with: pip install Pillow")
     sys.exit(1)
 
-CACHE_DIR = Path.home() / ".cache" / "emoji-wallpaper"
-URL_CACHE = CACHE_DIR / "urls.txt"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
+_REPO        = Path(__file__).resolve().parent
+DATA_DIR     = _REPO / "data" / "embeddings"
+CACHE_DIR    = _REPO / "data" / "cache"
+URL_CACHE    = DATA_DIR / "urls.txt"
+SEARCH_INDEX = DATA_DIR / "search-index.tsv"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
-THUMB_DIR = CACHE_DIR / "thumbs"
+THUMB_DIR    = CACHE_DIR / "thumbs"
 METADATA_URL = "https://raw.githubusercontent.com/xsalazar/emoji-kitchen-backend/main/app/metadata.json"
 URL_CACHE_MAX_DAYS = 365
 TILE_SIZE = 200
@@ -51,6 +53,7 @@ def get_screen_size():
 
 
 def build_url_cache():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     print("Downloading emoji metadata (~94MB, first run only)...", flush=True)
 
@@ -220,6 +223,7 @@ def pick_from_cache():
 
 
 def main():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     force_random = "--random" in sys.argv or "-r" in sys.argv

@@ -20,10 +20,11 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-CACHE_DIR  = Path.home() / ".cache" / "emoji-wallpaper"
+_REPO      = Path(__file__).resolve().parent
+CACHE_DIR  = _REPO / "data" / "cache"
 THUMB_DIR  = CACHE_DIR / "thumbs"
 SOCK_PATH  = CACHE_DIR / "combined-daemon.sock"
-DAEMON_PY  = Path.home() / ".local" / "bin" / "emoji-combined-daemon.py"
+DAEMON_PY  = _REPO / "emoji-combined-daemon.py"
 
 # Layout
 CANVAS_W    = 820

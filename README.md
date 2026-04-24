@@ -16,8 +16,6 @@ A collection of Python tools for browsing, searching, and living with [Google Em
 
 Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 
-Here's how to use this script to make it easy to search and create them:
-
 ## Tools
 
 | Script | What it does |
@@ -30,23 +28,43 @@ Here's how to use this script to make it easy to search and create them:
 | `emoji-story.py` | Converts text into a PNG strip, one emoji per phrase |
 | `emoji-combined-daemon.py` | Persistent daemon that keeps models loaded in memory |
 
-## Setup
-
-Getting everything running requires a few one-time steps: downloading the metadata index (~94 MB), building semantic text embeddings (~216 MB, ~10 min), and optionally building CLIP image embeddings (~65 MB). Total cache footprint is around **570 MB**.
-
-Copy the scripts to `~/.local/bin/`, then kick off the index build:
+## Install
 
 ```bash
-chmod +x *.py && cp *.py ~/.local/bin/
-python3 ~/.local/bin/emoji-wallpaper.py   # downloads index, sets today's wallpaper
+curl -sSL https://github.com/morganrivers/emojikitchen/releases/latest/download/install.sh | bash
 ```
 
-For semantic and CLIP search you'll also need a Python env with `sentence-transformers` and `torch` — a venv or conda/micromamba env both work. See **[docs/README.md](docs/README.md)** for the full step-by-step guide, including clipboard setup (xclip for X11, wl-clipboard for Wayland), how to build the embeddings, cache size breakdown, and wallpaper autostart setup.
+This will:
+1. Download the scripts to `~/.local/share/emojikitchen/`
+2. Download the embedding data (~150 MB)
+3. Create a Python virtualenv and install dependencies (~220 MB)
+4. Add `emoji-*` commands to `~/.local/bin/`
 
-Bind your picker of choice in i3 or sway:
+Make sure `~/.local/bin` is on your `PATH`, then run `emoji-picker`.
+
+### Disk usage
+
+The base install uses ~370 MB (scripts + embedding data + Python virtualenv).
+
+When you first select **semantic search** or **emoji story** from the rofi menu, a background daemon will automatically download ML models (~340 MB total) — this only happens once:
+
+Thumbnail images are also cached as you browse (~10 KB each).
+
+## Uninstall
+
+```bash
+curl -sSL https://github.com/morganrivers/emojikitchen/releases/latest/download/install.sh | bash -s uninstall
 ```
-bindsym $mod+shift+e exec --no-startup-id ~/.local/bin/emoji-picker-combined.py
+
+## Keybindings
+
+Bind your picker in i3 or sway:
+
 ```
+bindsym $mod+shift+e exec --no-startup-id emoji-picker
+```
+
+See **[docs/README.md](docs/README.md)** for clipboard setup, keybinding options, and the full tool reference.
 
 ---
 

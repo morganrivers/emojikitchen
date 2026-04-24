@@ -33,17 +33,19 @@ try:
 except ImportError:
     HAS_BUILD = False
 
-CACHE_DIR    = Path.home() / ".cache" / "emoji-wallpaper"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
+_REPO        = Path(__file__).resolve().parent
+DATA_DIR     = _REPO / "data" / "embeddings"
+CACHE_DIR    = _REPO / "data" / "cache"
+SEARCH_INDEX = DATA_DIR / "search-index.tsv"
 THUMB_DIR    = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
 
-CLIP_EMBEDDINGS     = CACHE_DIR / "clip-embeddings.npy"
-CLIP_URLS           = CACHE_DIR / "clip-urls.txt"
-CLIP_ALTS           = CACHE_DIR / "clip-alts.txt"
-CLIP_PCA_EMBEDDINGS = CACHE_DIR / "clip-embeddings-pca256.npy"
-CLIP_PCA_MATRIX     = CACHE_DIR / "clip-pca256-matrix.npy"
-CLIP_PCA_MEAN       = CACHE_DIR / "clip-pca256-mean.npy"
+CLIP_EMBEDDINGS     = DATA_DIR / "clip-embeddings.npy"
+CLIP_URLS           = DATA_DIR / "clip-urls.txt"
+CLIP_ALTS           = DATA_DIR / "clip-alts.txt"
+CLIP_PCA_EMBEDDINGS = DATA_DIR / "clip-embeddings-pca256.npy"
+CLIP_PCA_MATRIX     = DATA_DIR / "clip-pca256-matrix.npy"
+CLIP_PCA_MEAN       = DATA_DIR / "clip-pca256-mean.npy"
 
 MODEL_NAME  = "clip-ViT-B-32"
 TILE_SIZE   = 200
@@ -180,6 +182,24 @@ def rofi(prompt, entries_with_icons=None, lines=0):
     return result.stdout.strip()
 
 
+_THUMB_LIMIT = 200 * 1024 * 1024  # 200 MB
+
+def _trim_thumb_cache():
+    entries, total = [], 0
+    for p in THUMB_DIR.glob("*.png"):
+        st = p.stat()
+        entries.append((st.st_mtime, st.st_size, p))
+        total += st.st_size
+    if total <= _THUMB_LIMIT:
+        return
+    entries.sort()
+    for _, size, p in entries:
+        if total <= _THUMB_LIMIT:
+            break
+        p.unlink(missing_ok=True)
+        total -= size
+
+
 def get_thumb(url):
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     name = hashlib.md5(url.encode()).hexdigest() + ".png"
@@ -246,7 +266,7 @@ def main():
         subprocess.run(["rofi", "-e", "ML dependencies not installed.\nRun: pip install Pillow numpy sentence-transformers torch"])
         sys.exit(1)
 
-    use_pca = "--pca" in sys.argv
+    use_pca = "--no-pca" not in sys.argv
 
     if "--build" in sys.argv:
         build_embeddings()
@@ -293,6 +313,8 @@ def main():
             if thumb:
                 copy_image_to_clipboard(thumb)
             break
+
+    _trim_thumb_cache()
 
 
 if __name__ == "__main__":

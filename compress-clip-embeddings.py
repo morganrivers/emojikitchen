@@ -27,7 +27,7 @@ import sys
 import numpy as np
 from pathlib import Path
 
-CACHE = Path.home() / ".cache" / "emoji-wallpaper"
+CACHE = Path(__file__).resolve().parent / "data" / "embeddings"
 
 clip_dims = 256
 text_dims = 340

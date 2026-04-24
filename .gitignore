@@ -1,6 +1,10 @@
 micromamba
 __pycache__
+.venv
 
-# full-size embeddings — too large for repo, keep local only
-embeddings/clip-embeddings.npy
-embeddings/embeddings_old.npy
+# runtime cache — sockets, thumbnails, wallpaper images
+data/cache/
+
+# embedding data — distributed via GitHub Releases as data.tar.gz
+data/embeddings/
+data.tar.gz

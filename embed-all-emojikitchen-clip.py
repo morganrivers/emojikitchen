@@ -25,13 +25,15 @@ except ImportError as e:
     print("Run: pip install Pillow numpy sentence-transformers torch", file=__import__("sys").stderr)
     raise SystemExit(1)
 
-CACHE_DIR       = Path.home() / ".cache" / "emoji-wallpaper"
+_REPO           = Path(__file__).resolve().parent
+DATA_DIR        = _REPO / "data" / "embeddings"
+CACHE_DIR       = _REPO / "data" / "cache"
 THUMB_DIR       = CACHE_DIR / "thumbs"
-SEM_URLS        = CACHE_DIR / "embedding-urls.txt"
-SEM_ALTS        = CACHE_DIR / "embedding-alts.txt"
-CLIP_EMBEDDINGS = CACHE_DIR / "clip-embeddings.npy"
-CLIP_URLS       = CACHE_DIR / "clip-urls.txt"
-CLIP_ALTS       = CACHE_DIR / "clip-alts.txt"
+SEM_URLS        = DATA_DIR / "embedding-urls.txt"
+SEM_ALTS        = DATA_DIR / "embedding-alts.txt"
+CLIP_EMBEDDINGS = DATA_DIR / "clip-embeddings.npy"
+CLIP_URLS       = DATA_DIR / "clip-urls.txt"
+CLIP_ALTS       = DATA_DIR / "clip-alts.txt"
 
 MODEL_NAME = "clip-ViT-B-32"
 BATCH      = 64

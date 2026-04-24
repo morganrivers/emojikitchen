@@ -27,11 +27,12 @@ try:
 except ImportError:
     HAS_PIL = False
 
-CACHE_DIR      = Path.home() / ".cache" / "emoji-wallpaper"
+_REPO          = Path(__file__).resolve().parent
+CACHE_DIR      = _REPO / "data" / "cache"
 THUMB_DIR      = CACHE_DIR / "thumbs"
 WALLPAPER_PATH = CACHE_DIR / "wallpaper.png"
 SOCK_PATH      = CACHE_DIR / "combined-daemon.sock"
-DAEMON_PY      = Path.home() / ".local" / "bin" / "emoji-combined-daemon.py"
+DAEMON_PY      = _REPO / "emoji-combined-daemon.py"
 
 TILE_SIZE   = 200
 MAX_RESULTS = 5000
@@ -52,7 +53,7 @@ def copy_image_to_clipboard(path):
 
 
 def _start_daemon():
-    subprocess.Popen([str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(75):  # up to 15s — two models to load
         time.sleep(0.2)
         if SOCK_PATH.exists():
@@ -118,6 +119,24 @@ def rofi(prompt, entries_with_icons=None, lines=0):
     if result.returncode != 0 or not result.stdout.strip():
         return None
     return result.stdout.strip()
+
+
+_THUMB_LIMIT = 200 * 1024 * 1024  # 200 MB
+
+def _trim_thumb_cache():
+    entries, total = [], 0
+    for p in THUMB_DIR.glob("*.png"):
+        st = p.stat()
+        entries.append((st.st_mtime, st.st_size, p))
+        total += st.st_size
+    if total <= _THUMB_LIMIT:
+        return
+    entries.sort()
+    for _, size, p in entries:
+        if total <= _THUMB_LIMIT:
+            break
+        p.unlink(missing_ok=True)
+        total -= size
 
 
 def get_thumb(url):
@@ -217,6 +236,8 @@ def main():
             if thumb:
                 copy_image_to_clipboard(thumb)
             break
+
+    _trim_thumb_cache()
 
 
 if __name__ == "__main__":

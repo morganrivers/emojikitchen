@@ -30,28 +30,30 @@ from pathlib import Path
 import numpy as np
 from fastembed import TextEmbedding
 
-CACHE_DIR    = Path.home() / ".cache" / "emoji-wallpaper"
+_REPO        = Path(__file__).resolve().parent
+DATA_DIR     = _REPO / "data" / "embeddings"
+CACHE_DIR    = _REPO / "data" / "cache"
 SOCK_PATH    = CACHE_DIR / "split-daemon.sock"
-SEARCH_INDEX = CACHE_DIR / "search-index.tsv"
+SEARCH_INDEX = DATA_DIR / "search-index.tsv"
 
 # base emoji files (built by build-base-emoji-embeddings.py)
-BASE_CODES = CACHE_DIR / "base-emoji-codes.txt"
-BASE_NAMES = CACHE_DIR / "base-emoji-names.txt"
-BASE_SEM   = CACHE_DIR / "base-emoji-sem.npy"
-BASE_CLIP  = CACHE_DIR / "base-emoji-clip.npy"
+BASE_CODES = DATA_DIR / "base-emoji-codes.txt"
+BASE_NAMES = DATA_DIR / "base-emoji-names.txt"
+BASE_SEM   = DATA_DIR / "base-emoji-sem.npy"
+BASE_CLIP  = DATA_DIR / "base-emoji-clip.npy"
 
 # full combo files (shared with combined daemon)
-SEM_EMBEDDINGS       = CACHE_DIR / "embeddings.npy"
-SEM_EMBEDDINGS_PCA   = CACHE_DIR / "embeddings-pca340.npy"
-SEM_PCA_MATRIX       = CACHE_DIR / "embeddings-pca340-matrix.npy"
-SEM_PCA_MEAN         = CACHE_DIR / "embeddings-pca340-mean.npy"
-SEM_URLS             = CACHE_DIR / "embedding-urls.txt"
-CLIP_EMBEDDINGS      = CACHE_DIR / "clip-embeddings.npy"
-CLIP_EMBEDDINGS_PCA  = CACHE_DIR / "clip-embeddings-pca256.npy"
-CLIP_PCA_MATRIX      = CACHE_DIR / "clip-pca256-matrix.npy"
-CLIP_PCA_MEAN        = CACHE_DIR / "clip-pca256-mean.npy"
-CLIP_URLS            = CACHE_DIR / "clip-urls.txt"
-CLIP_ALTS            = CACHE_DIR / "clip-alts.txt"
+SEM_EMBEDDINGS       = DATA_DIR / "embeddings.npy"
+SEM_EMBEDDINGS_PCA   = DATA_DIR / "embeddings-pca340.npy"
+SEM_PCA_MATRIX       = DATA_DIR / "embeddings-pca340-matrix.npy"
+SEM_PCA_MEAN         = DATA_DIR / "embeddings-pca340-mean.npy"
+SEM_URLS             = DATA_DIR / "embedding-urls.txt"
+CLIP_EMBEDDINGS      = DATA_DIR / "clip-embeddings.npy"
+CLIP_EMBEDDINGS_PCA  = DATA_DIR / "clip-embeddings-pca256.npy"
+CLIP_PCA_MATRIX      = DATA_DIR / "clip-pca256-matrix.npy"
+CLIP_PCA_MEAN        = DATA_DIR / "clip-pca256-mean.npy"
+CLIP_URLS            = DATA_DIR / "clip-urls.txt"
+CLIP_ALTS            = DATA_DIR / "clip-alts.txt"
 
 IDLE_TIMEOUT = 600
 
