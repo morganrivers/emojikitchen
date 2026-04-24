@@ -385,7 +385,7 @@ def main():
             text = rofi("story text:")
             if not text:
                 continue
-            subprocess.run([str(STORY_PY), "--output", str(STORY_OUT), text], check=True)
+            subprocess.run([sys.executable, str(STORY_PY), "--output", str(STORY_OUT), text], check=True)
             subprocess.Popen(["firefox", str(STORY_OUT)])
             break
 

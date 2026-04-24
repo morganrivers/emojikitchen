@@ -68,7 +68,7 @@ def wrap_text(text, font, max_width):
 
 
 def _start_daemon():
-    subprocess.Popen([str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(75):
         time.sleep(0.2)
         if SOCK_PATH.exists():

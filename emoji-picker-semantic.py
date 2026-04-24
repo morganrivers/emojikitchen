@@ -58,7 +58,7 @@ def copy_image_to_clipboard(path):
 
 def _start_daemon():
     subprocess.Popen(
-        [str(DAEMON_PY)],
+        [sys.executable, str(DAEMON_PY)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
