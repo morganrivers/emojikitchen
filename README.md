@@ -20,7 +20,7 @@ Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 
 | Script | What it does |
 |---|---|
-| `emoji-picker.py` | Search and combine emojis using a fast sloppy, or slow accurate method |
+| `emoji-picker.py` | Search and combine emojis using a fast sloppy, or slow accurate method. Also make a tiled story out of any text. |
 | `emoji-wallpaper.py` | Sets a random mashup as a tiled wallpaper each day |
 
 ## Requirements
