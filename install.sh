@@ -26,7 +26,7 @@ if [ "${1:-}" = "uninstall" ]; then
     echo "  $CACHE/torch/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2"
     echo ""
     echo "If these are used by other projects, press Ctrl+C to cancel."
-    read -r -p "Press Enter to continue..."
+    read -r -p "Press Enter to continue..." < /dev/tty
 
     echo "Removing ML model caches ..."
     rm -rf \
