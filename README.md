@@ -23,10 +23,17 @@ Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 | `emoji-picker.py` | Keyword search → rofi thumbnail grid → set as wallpaper |
 | `emoji-picker-semantic.py` | Same, using sentence embeddings for fuzzy matching |
 | `emoji-picker-combined.py` | Combines CLIP + MiniLM for best results |
-| `emoji-search.py` | CLI search, optionally sets wallpaper |
 | `emoji-wallpaper.py` | Sets a random mashup as a tiled wallpaper each day |
 | `emoji-story.py` | Converts text into a PNG strip, one emoji per phrase |
 | `emoji-combined-daemon.py` | Persistent daemon that keeps models loaded in memory |
+
+## Requirements
+
+- **Python 3.8+** with `venv`
+- **rofi** — the picker UI
+- **feh** or **nitrogen** — for setting wallpapers
+- **curl** — used by the installer
+- Linux with X11 or Wayland
 
 ## Install
 
@@ -48,7 +55,7 @@ The base install uses ~370 MB (scripts + embedding data + Python virtualenv).
 
 When you first select **semantic search** or **emoji story** from the rofi menu, a background daemon will automatically download ML models (~340 MB total) — this only happens once:
 
-Thumbnail images are also cached as you browse (~10 KB each).
+Thumbnail images are cached as you browse (~10 KB each) in `~/.local/share/emojikitchen/data/cache/thumbs/`. The cache grows gradually with use but is automatically pruned to stay under 200 MB.
 
 ## Uninstall
 

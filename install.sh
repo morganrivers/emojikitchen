@@ -39,7 +39,7 @@ if [ "${1:-}" = "uninstall" ]; then
     exit 0
 fi
 
-REPO_URL="https://github.com/OWNER/emojikitchen"
+REPO_URL="https://github.com/morganrivers/emojikitchen"
 RELEASE_URL="$REPO_URL/releases/latest/download"
 
 INSTALL_DIR="${EMOJIKITCHEN_DIR:-$HOME/.local/share/emojikitchen}"
