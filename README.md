@@ -50,7 +50,7 @@ This will:
 3. Create a Python virtualenv and install dependencies (~220 MB)
 4. Add `emoji-*` commands to `~/.local/bin/`
 
-Make sure `~/.local/bin` is on your `PATH`, then run `emoji-picker`.
+Then run `emoji-picker` from your terminal.
 
 ### Disk usage
 
