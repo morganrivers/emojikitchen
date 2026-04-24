@@ -48,7 +48,7 @@ VENV="$INSTALL_DIR/.venv"
 
 # ── 1. get scripts ────────────────────────────────────────────────────────────
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || true
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)" || true
 if [ -f "$SCRIPT_DIR/emoji-picker.py" ]; then
     # Running from inside the repo — use it in place
     INSTALL_DIR="$SCRIPT_DIR"
