@@ -12,7 +12,7 @@ With sweet musk-roses and with eglantine. 🌹
 
 ---
 
-A collection of Python tools for browsing, searching, and living with [Google Emoji Kitchen](https://emojikitchen.dev/) mashups on your Linux desktop.
+A collection of Python tools for searching [Google Emoji Kitchen](https://emojikitchen.dev/) mashups on your Linux desktop.
 
 Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 
