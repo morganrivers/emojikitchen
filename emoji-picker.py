@@ -141,10 +141,12 @@ def _start_daemon():
 
 
 def query_daemon(query, limit=MAX_RESULTS):
+    _started = False
     for attempt in range(2):
         if not SOCK_PATH.exists():
-            if attempt > 0 or not _start_daemon():
+            if _started or not _start_daemon():
                 return None
+            _started = True
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(30)
