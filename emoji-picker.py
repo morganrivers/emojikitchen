@@ -32,12 +32,22 @@ except ImportError:
 _REPO        = Path(__file__).resolve().parent
 DATA_DIR     = _REPO / "data" / "embeddings"
 CACHE_DIR    = _REPO / "data" / "cache"
+# Prefer the venv interpreter for spawned subprocesses so the daemon and
+# emoji-story script find their pip-installed deps even when the picker
+# itself was launched with a different python.
+_VENV_PY     = _REPO / ".venv" / "bin" / "python3"
+_PYTHON      = str(_VENV_PY) if _VENV_PY.exists() else sys.executable
 SEARCH_INDEX = DATA_DIR / "search-index.tsv"
 THUMB_DIR    = CACHE_DIR / "thumbs"
 WALLPAPER_PATH   = CACHE_DIR / "wallpaper.png"
 WALLPAPER_SCRIPT = _REPO / "emoji-wallpaper.py"
 SOCK_PATH    = CACHE_DIR / "split-daemon.sock"
 DAEMON_PY    = _REPO / "emoji-split-daemon.py"
+DAEMON_PID   = CACHE_DIR / "split-daemon.pid"
+DAEMON_LOG   = CACHE_DIR / "split-daemon.log"
+DOWNLOAD_PID = CACHE_DIR / "data-download.pid"
+DOWNLOAD_LOG = CACHE_DIR / "data-download.log"
+DATA_TARBALL_URL = "https://github.com/morganrivers/emojikitchen/releases/latest/download/data.tar.gz"
 
 TILE_SIZE = 200
 MAX_RESULTS = 5000
@@ -125,10 +135,90 @@ def rofi(prompt, entries_with_icons=None, text_entries=None, lines=0):
     return result.stdout.strip()
 
 
-def _start_daemon():
-    subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(75):  # up to 15s - two models to load
-        time.sleep(0.2)
+def _download_in_progress():
+    if not DOWNLOAD_PID.exists():
+        return False
+    try:
+        pid = int(DOWNLOAD_PID.read_text().strip())
+        os.kill(pid, 0)
+        return True
+    except (ValueError, OSError):
+        DOWNLOAD_PID.unlink(missing_ok=True)
+        return False
+
+
+def _start_data_download():
+    """Spawn a background curl|tar to fetch the semantic models tarball.
+    Writes the bash PID to DOWNLOAD_PID so subsequent invocations can detect
+    progress; the wrapper removes the pid file when extraction finishes."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    DOWNLOAD_LOG.unlink(missing_ok=True)
+    script = (
+        f"(curl -L --fail --silent --show-error '{DATA_TARBALL_URL}' "
+        f"| tar -xz -C '{_REPO}') > '{DOWNLOAD_LOG}' 2>&1; "
+        f"rm -f '{DOWNLOAD_PID}'"
+    )
+    proc = subprocess.Popen(
+        ["bash", "-c", script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    DOWNLOAD_PID.write_text(str(proc.pid))
+
+
+def _daemon_alive():
+    """True only if the recorded PID is a running, non-zombie emoji-split daemon.
+    os.kill(pid, 0) alone returns True for zombies (dead-but-unreaped children),
+    so we also read /proc/<pid>/status and cmdline."""
+    if not DAEMON_PID.exists():
+        return False
+    try:
+        pid = int(DAEMON_PID.read_text().strip())
+    except (ValueError, OSError):
+        DAEMON_PID.unlink(missing_ok=True)
+        return False
+    proc_dir = Path(f"/proc/{pid}")
+    if not proc_dir.exists():
+        DAEMON_PID.unlink(missing_ok=True)
+        return False
+    try:
+        for line in (proc_dir / "status").read_text().splitlines():
+            if line.startswith("State:") and "Z" in line.split(":", 1)[1]:
+                DAEMON_PID.unlink(missing_ok=True)
+                return False
+        cmdline = (proc_dir / "cmdline").read_bytes()
+        if b"emoji-split-daemon" not in cmdline:
+            # PID was recycled into some unrelated process
+            DAEMON_PID.unlink(missing_ok=True)
+            return False
+    except OSError:
+        DAEMON_PID.unlink(missing_ok=True)
+        return False
+    return True
+
+
+def _spawn_daemon():
+    """Launch the daemon in the background. Returns the Popen object.
+    On first run, fastembed downloads ~230 MB of models, so the daemon may
+    take 30-90s before its socket appears. Stderr/stdout are tee'd to a log
+    so failures are diagnosable instead of silent."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    log = open(DAEMON_LOG, "wb")
+    proc = subprocess.Popen(
+        [_PYTHON, str(DAEMON_PY)],
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    DAEMON_PID.write_text(str(proc.pid))
+    return proc
+
+
+def _wait_for_socket(timeout):
+    """Poll SOCK_PATH until it accepts a connection, up to `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         if SOCK_PATH.exists():
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -137,36 +227,42 @@ def _start_daemon():
                 return True
             except OSError:
                 pass
+        time.sleep(0.2)
     return False
 
 
 def query_daemon(query, limit=MAX_RESULTS):
-    _started = False
-    for attempt in range(2):
-        if not SOCK_PATH.exists():
-            if _started or not _start_daemon():
-                return None
-            _started = True
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.settimeout(30)
-            s.connect(str(SOCK_PATH))
-            s.sendall((json.dumps({"query": query, "limit": limit}) + "\n").encode())
-            data = b""
-            while True:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                data += chunk
-                if data.endswith(b"\n"):
-                    break
-            s.close()
-            results = json.loads(data.decode())
-            if isinstance(results, list):
-                return [(r["rank"], r["alt"], r["url"], "") for r in results]
-        except Exception:
-            if SOCK_PATH.exists():
-                SOCK_PATH.unlink()
+    """Returns a list of results, "loading" if the daemon is still warming up,
+    or None if it failed to start at all."""
+    if not SOCK_PATH.exists():
+        if not _daemon_alive():
+            _spawn_daemon()
+        # Brief wait for the warm case (models cached, ~2s startup).
+        # On first run this will time out and we tell the user to retry.
+        if not _wait_for_socket(5):
+            return "loading" if _daemon_alive() else None
+
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(30)
+        s.connect(str(SOCK_PATH))
+        s.sendall((json.dumps({"query": query, "limit": limit}) + "\n").encode())
+        data = b""
+        while True:
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+            if data.endswith(b"\n"):
+                break
+        s.close()
+        results = json.loads(data.decode())
+        if isinstance(results, list):
+            return [(r["rank"], r["alt"], r["url"], "") for r in results]
+    except Exception:
+        if SOCK_PATH.exists():
+            SOCK_PATH.unlink()
+        return "loading" if _daemon_alive() else None
     return None
 
 
@@ -304,15 +400,32 @@ def _trim_thumb_cache():
 
 
 def get_thumb(url):
+    """Download `url` to the thumb cache and return the path, or None on
+    permanent failure. Uses a tmp file + atomic rename so a network blip
+    can't leave a truncated PNG that would render as an empty grid cell on
+    later runs. Retries once with a short backoff for transient failures."""
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     name = hashlib.md5(url.encode()).hexdigest() + ".png"
     path = THUMB_DIR / name
-    if not path.exists():
+    if path.exists() and path.stat().st_size > 0:
+        return str(path)
+    if path.exists():
+        path.unlink(missing_ok=True)
+    tmp = path.with_suffix(".png.tmp")
+    for attempt in range(2):
         try:
-            urllib.request.urlretrieve(url, path)
+            req = urllib.request.Request(url, headers={"User-Agent": "emojikitchen-picker"})
+            with urllib.request.urlopen(req, timeout=10) as resp, open(tmp, "wb") as f:
+                shutil.copyfileobj(resp, f)
+            if tmp.stat().st_size > 0:
+                tmp.replace(path)
+                return str(path)
         except Exception:
-            return None
-    return str(path)
+            pass
+        tmp.unlink(missing_ok=True)
+        if attempt == 0:
+            time.sleep(0.3)
+    return None
 
 
 def set_wallpaper(url, alt):
@@ -379,7 +492,14 @@ def main():
             ((DATA_DIR / "embeddings.npy").exists() or
              (DATA_DIR / "embeddings-pca340.npy").exists())
         )
-        sem_label   = "semantic search (better, slow)" + ("" if _has_semantic else "  [models not downloaded]")
+        _downloading = (not _has_semantic) and _download_in_progress()
+        if _has_semantic:
+            sem_suffix = ""
+        elif _downloading:
+            sem_suffix = "  [downloading...]"
+        else:
+            sem_suffix = "  [models not downloaded]"
+        sem_label   = "semantic search (better, slow)" + sem_suffix
         story_label = "emoji story"
         modes = ["keyword search", "combo", sem_label, story_label]
 
@@ -391,7 +511,7 @@ def main():
             text = rofi("story text:")
             if not text:
                 continue
-            subprocess.run([sys.executable, str(STORY_PY), "--output", str(STORY_OUT), text], check=True)
+            subprocess.run([_PYTHON, str(STORY_PY), "--output", str(STORY_OUT), text], check=True)
             copy_image_to_clipboard(str(STORY_OUT), notify="Story copied to clipboard")
             break
 
@@ -422,15 +542,27 @@ def main():
             query_label = f"'{term1}+{term2}'"
         elif mode == sem_label:
             if not _has_semantic:
-                rofi("Semantic models not downloaded - select this again after first run to trigger download", lines=0)
+                if not _downloading:
+                    _start_data_download()
+                subprocess.run(["rofi", "-e",
+                    "Downloading semantic models (~150 MB) in background.\n"
+                    "Try search again in a minute - it'll work as soon as\n"
+                    "the download finishes."])
                 continue
             query = rofi("emoji search (semantic):")
             if not query:
                 continue  # back to start
 
             results = query_daemon(query)
+            if results == "loading":
+                subprocess.run(["rofi", "-e",
+                    "Search daemon is still loading models (first run\n"
+                    "downloads ~230 MB).\n"
+                    "Try the search again in a minute."])
+                continue
             if not results:
-                rofi("Search daemon unavailable - press Esc", lines=0)
+                subprocess.run(["rofi", "-e",
+                    f"Search daemon failed to start.\nSee {DAEMON_LOG} for details."])
                 continue  # back to start
 
             patterns = []

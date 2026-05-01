@@ -112,5 +112,20 @@ EOF
 done
 
 echo ""
-echo "Done. Make sure $BIN is on your PATH, then run:"
-echo "  emoji-picker"
+case ":${PATH}:" in
+    *":$BIN:"*)
+        echo "Done. Run:"
+        echo "  emoji-picker"
+        ;;
+    *)
+        case "$(basename "${SHELL:-}")" in
+            zsh)  RC="$HOME/.zshrc" ;;
+            *)    RC="$HOME/.bashrc" ;;
+        esac
+        echo "Done, but $BIN is not on your PATH."
+        echo "Add it by running:"
+        echo "  echo 'export PATH=\"$BIN:\$PATH\"' >> $RC && source $RC"
+        echo "Then run:"
+        echo "  emoji-picker"
+        ;;
+esac
