@@ -51,6 +51,10 @@ DATA_TARBALL_URL = "https://github.com/morganrivers/emojikitchen/releases/latest
 
 TILE_SIZE = 200
 MAX_RESULTS = 5000
+# Some combos in the index 404 on Google's CDN (e.g. dress-alarm_clock) so
+# the rofi cell renders blank. Default: hide them. Flip to True if you want
+# to verify nothing else is silently dropping rows.
+SHOW_BROKEN_THUMBS = False
 BATCH_SIZE = 100
 LOAD_MORE  = "⬇  load more results..."
 STORY_PY   = _REPO / "emoji-story.py"
@@ -593,7 +597,8 @@ def main():
                 thumbs = list(ex.map(get_thumb, [url for _, _, url, _ in batch]))
 
             icon_entries = [(format_label(alt, url, text, patterns), thumb)
-                            for (_, alt, url, text), thumb in zip(batch, thumbs)]
+                            for (_, alt, url, text), thumb in zip(batch, thumbs)
+                            if thumb is not None or SHOW_BROKEN_THUMBS]
             if offset + BATCH_SIZE < len(results):
                 icon_entries.append((LOAD_MORE, None))
 
