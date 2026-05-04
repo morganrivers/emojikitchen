@@ -613,8 +613,9 @@ def main():
         if not selected or selected == LOAD_MORE:
             continue  # back to start
 
-        # alt is the leading word-chars+hyphens in the label, before the base emoji pair
-        m = re.match(r'^[\w-]+', selected)
+        # alt is the leading non-whitespace token in the label, before the base emoji pair.
+        # Must accept '+' too so '+1-*' combos (thumbs-up) match — \w-only missed those.
+        m = re.match(r'^\S+', selected)
         selected_alt = m.group(0) if m else selected
 
         # Copy selected image to clipboard
