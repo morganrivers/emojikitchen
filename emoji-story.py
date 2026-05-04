@@ -12,6 +12,7 @@ import sys
 import re
 import json
 import hashlib
+import shutil
 import socket
 import subprocess
 import time
@@ -82,16 +83,17 @@ def _start_daemon():
     return False
 
 
-def query_daemon(phrase):
+def query_daemon(phrase, limit=10):
+    """Return a best-first list of candidate URLs, or [] on failure."""
     for attempt in range(2):
         if not SOCK_PATH.exists():
             if attempt > 0 or not _start_daemon():
-                return None
+                return []
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(30)
             s.connect(str(SOCK_PATH))
-            s.sendall((json.dumps({"query": phrase, "limit": 1}) + "\n").encode())
+            s.sendall((json.dumps({"query": phrase, "limit": limit}) + "\n").encode())
             data = b""
             while True:
                 chunk = s.recv(65536)
@@ -102,12 +104,12 @@ def query_daemon(phrase):
                     break
             s.close()
             results = json.loads(data.decode())
-            if isinstance(results, list) and results:
-                return results[0]["url"]
+            if isinstance(results, list):
+                return [r["url"] for r in results]
         except Exception:
             if SOCK_PATH.exists():
                 SOCK_PATH.unlink()
-    return None
+    return []
 
 
 def split_phrases(text, max_words=5):
@@ -127,31 +129,60 @@ def split_phrases(text, max_words=5):
     return [p for p in result if p]
 
 
-def get_image(url):
+def get_thumb(url):
+    """Download `url` to the thumb cache and return the path, or None on
+    permanent failure. Uses tmp+rename so a network blip can't leave a
+    truncated PNG that renders blank on later runs."""
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     name = hashlib.md5(url.encode()).hexdigest() + ".png"
     path = THUMB_DIR / name
-    if not path.exists():
-        urllib.request.urlretrieve(url, path)
-    return Image.open(path).convert("RGBA")
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    if path.exists():
+        path.unlink(missing_ok=True)
+    tmp = path.with_suffix(".png.tmp")
+    for attempt in range(2):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "emojikitchen-story"})
+            with urllib.request.urlopen(req, timeout=10) as resp, open(tmp, "wb") as f:
+                shutil.copyfileobj(resp, f)
+            if tmp.stat().st_size > 0:
+                tmp.replace(path)
+                return path
+        except Exception:
+            pass
+        tmp.unlink(missing_ok=True)
+        if attempt == 0:
+            time.sleep(0.3)
+    return None
+
+
+def resolve_phrase(phrase):
+    """Return (url, thumb_path) for the first daemon candidate whose
+    thumbnail downloads, or (None, None) if all candidates 404 or fail."""
+    for url in query_daemon(phrase):
+        path = get_thumb(url)
+        if path is not None:
+            return url, path
+    return None, None
 
 
 def build_png(pairs, output_path, font):
     # Pre-compute row heights (variable if text wraps)
     row_data = []
-    for phrase, url in pairs:
+    for phrase, path in pairs:
         lines = wrap_text(phrase, font, TEXT_MAX_W)
         line_h = font.getbbox("Ag")[3]
         text_block_h = len(lines) * line_h + (len(lines) - 1) * LINE_GAP
         row_h = max(IMG_SIZE, text_block_h) + PADDING * 2
-        row_data.append((lines, url, row_h))
+        row_data.append((lines, path, row_h))
 
     total_h = sum(r[2] for r in row_data) + PADDING
     canvas = Image.new("RGB", (CANVAS_W, total_h), BG)
     draw = ImageDraw.Draw(canvas)
 
     y = PADDING
-    for i, (lines, url, row_h) in enumerate(row_data):
+    for i, (lines, path, row_h) in enumerate(row_data):
         mid_y = y + row_h // 2
 
         # Text: vertically centered block
@@ -171,9 +202,9 @@ def build_png(pairs, output_path, font):
             [IMG_X - 3, img_y - 3, IMG_X + IMG_SIZE + 3, img_y + IMG_SIZE + 3],
             outline=BORDER, width=2,
         )
-        if url:
+        if path:
             try:
-                emoji = get_image(url).resize((IMG_SIZE, IMG_SIZE), Image.LANCZOS)
+                emoji = Image.open(path).convert("RGBA").resize((IMG_SIZE, IMG_SIZE), Image.LANCZOS)
                 canvas.paste(emoji, (IMG_X, img_y), emoji)
             except Exception:
                 pass
@@ -216,10 +247,10 @@ def main():
     print(f"{len(phrases)} phrases. Searching...", flush=True)
     pairs = []
     for phrase in phrases:
-        url = query_daemon(phrase)
+        url, path = resolve_phrase(phrase)
         label = url.split("/")[-1].replace(".png", "") if url else "none"
         print(f"  {phrase!r:45s} -> {label}")
-        pairs.append((phrase, url))
+        pairs.append((phrase, path))
 
     build_png(pairs, output, font)
 
