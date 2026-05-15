@@ -327,7 +327,7 @@ def _xml_escape(s):
 
 
 def url_to_base_emojis(url):
-    m = re.search(r'/u([0-9a-f]+)_u([0-9a-f]+)\.png$', url, re.IGNORECASE)
+    m = re.search(r'/u([0-9a-f]+)(?:-u[0-9a-f]+)*_u([0-9a-f]+)(?:-u[0-9a-f]+)*\.png$', url, re.IGNORECASE)
     if m:
         try:
             return chr(int(m.group(1), 16)) + chr(int(m.group(2), 16))
@@ -355,7 +355,7 @@ def build_base_emoji_index(entries):
     """Return sorted list of (hex, emoji_char, name) for all unique base emojis."""
     seen = {}
     for url, alt, _text in entries:
-        m = re.search(r'/u([0-9a-f]+)_u([0-9a-f]+)\.png$', url, re.IGNORECASE)
+        m = re.search(r'/u([0-9a-f]+)(?:-u[0-9a-f]+)*_u([0-9a-f]+)(?:-u[0-9a-f]+)*\.png$', url, re.IGNORECASE)
         if not m:
             continue
         hex1, hex2 = m.group(1).lower(), m.group(2).lower()
