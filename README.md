@@ -38,11 +38,11 @@ Emojikitchen has approximately 147,000 images. Many of them are *delightful*.
 ## Install
 
 ```bash
-curl -sSL https://github.com/morganrivers/emojikitchen/releases/latest/download/install.sh | bash
+curl -sSL https://github.com/morganrivers/kitchensearch/releases/latest/download/install.sh | bash
 ```
 
 This will:
-1. Download the scripts to `~/.local/share/emojikitchen/`
+1. Download the scripts to `~/.local/share/kitchensearch/`
 2. Download the embedding data (~150 MB)
 3. Create a Python virtualenv and install dependencies (~220 MB)
 4. Add `emoji-*` commands to `~/.local/bin/`
@@ -55,12 +55,12 @@ The base install uses ~370 MB (scripts + embedding data + Python virtualenv).
 
 When you first select `semantic search` or `emoji story` from the rofi menu, a background daemon will automatically download ML models (~340 MB total) - this only happens once:
 
-Thumbnail images are cached as you browse (~10 KB each) in `~/.local/share/emojikitchen/data/cache/thumbs/`. The cache grows gradually with use but is automatically pruned to stay under 200 MB.
+Thumbnail images are cached as you browse (~10 KB each) in `~/.local/share/kitchensearch/data/cache/thumbs/`. The cache grows gradually with use but is automatically pruned to stay under 200 MB.
 
 ## Uninstall
 
 ```bash
-curl -sSL https://github.com/morganrivers/emojikitchen/releases/latest/download/install.sh | bash -s uninstall
+curl -sSL https://github.com/morganrivers/kitchensearch/releases/latest/download/install.sh | bash -s uninstall
 ```
 
 ## Keybindings

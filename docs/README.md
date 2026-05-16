@@ -14,8 +14,8 @@ sudo apt install wl-clipboard   # Wayland
 
 **Clone and install:**
 ```bash
-git clone https://github.com/morganrivers/emojikitchen
-cd emojikitchen
+git clone https://github.com/morganrivers/kitchensearch
+cd kitchensearch
 bash install.sh
 ```
 

@@ -22,10 +22,13 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 _REPO      = Path(__file__).resolve().parent
+if not (_REPO / "data").exists():
+    _REPO = Path(sys.executable).resolve().parent
 CACHE_DIR  = _REPO / "data" / "cache"
 THUMB_DIR  = CACHE_DIR / "thumbs"
 SOCK_PATH  = CACHE_DIR / "split-daemon.sock"
 DAEMON_PY  = _REPO / "emoji-split-daemon.py"
+DAEMON_BIN = _REPO / "emoji-split-daemon"
 
 # Layout
 CANVAS_W    = 820
@@ -69,7 +72,8 @@ def wrap_text(text, font, max_width):
 
 
 def _start_daemon():
-    subprocess.Popen([sys.executable, str(DAEMON_PY)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cmd = [str(DAEMON_BIN)] if DAEMON_BIN.exists() else [sys.executable, str(DAEMON_PY)]
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(75):
         time.sleep(0.2)
         if SOCK_PATH.exists():
@@ -249,7 +253,7 @@ def main():
     for phrase in phrases:
         url, path = resolve_phrase(phrase)
         label = url.split("/")[-1].replace(".png", "") if url else "none"
-        print(f"  {phrase!r:45s} -> {label}")
+        print(f"  {phrase!r:45s} -> {label}", flush=True)
         pairs.append((phrase, path))
 
     build_png(pairs, output, font)
